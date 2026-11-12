@@ -156,6 +156,9 @@ export default function PlayScreen() {
   const {
     isLoading,
     showControls,
+    showEpisodeModal,
+    showSourceModal,
+    showSpeedModal,
     // showNextEpisodeOverlay,
     initialPosition,
     introEndTime,
@@ -285,8 +288,9 @@ export default function PlayScreen() {
     <TouchableOpacity
       activeOpacity={1}
       style={styles.videoContainer}
-      onPress={onScreenPress}
-      disabled={touch} // 触摸设备的点击、双击和滑动都由上面的手势层处理
+      onPress={Platform.isTV ? undefined : onScreenPress}
+      disabled={touch || Platform.isTV} // TV 确认键由遥控器处理，避免同时触发触摸点击
+      accessible={Platform.isTV ? false : undefined}
     >
       {/* 条件渲染Video组件：只有在有有效URL时才渲染 */}
       {currentEpisode?.url ? (
@@ -324,8 +328,16 @@ export default function PlayScreen() {
     <PlayerControls showControls={showControls} setShowControls={setShowControls} />
   ) : null;
 
+  // Android also needs accessible=false to release a previously focusable View.
+  const stageFocusable = Platform.isTV && !showControls && !showEpisodeModal && !showSourceModal && !showSpeedModal;
   return (
-    <ThemedView focusable style={styles.container}>
+    <ThemedView
+      accessible={stageFocusable}
+      isTVSelectable={stageFocusable}
+      focusable={stageFocusable}
+      hasTVPreferredFocus={stageFocusable}
+      style={styles.container}
+    >
       <StatusBar hidden={touch && !stacked} />
       <CinemaPlayerStage stacked={stacked} video={video} overlay={overlay} panel={<TouchPlayerPanel />} />
       <EpisodeSelectionModal />
