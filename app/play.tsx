@@ -1,11 +1,12 @@
-import React, { useEffect, useRef, useCallback, memo, useMemo } from "react";
-import { StyleSheet, TouchableOpacity, BackHandler, AppState, AppStateStatus, View } from "react-native";
+import React, { useEffect, useRef, useCallback, useMemo, useState, memo } from "react";
+import { StyleSheet, TouchableOpacity, BackHandler, AppState, AppStateStatus, Platform, StatusBar, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Video } from "expo-av";
 import { useKeepAwake } from "expo-keep-awake";
 import { CinemaButton, CinemaState } from '@/components/cinema/CinemaUI';
+import { CinemaPlayerStage, CinemaTouchGestures, LevelControl } from '@/components/cinema/CinemaPlayer';
 import { ThemedView } from "@/components/ThemedView";
-import { PlayerControls } from "@/components/PlayerControls";
+import { PlayerControls, TouchPlayerControls, TouchPlayerPanel } from "@/components/PlayerControls";
 import { EpisodeSelectionModal } from "@/components/EpisodeSelectionModal";
 import { SourceSelectionModal } from "@/components/SourceSelectionModal";
 import { SpeedSelectionModal } from "@/components/SpeedSelectionModal";
@@ -21,6 +22,35 @@ import { useVideoHandlers } from "@/hooks/useVideoHandlers";
 import Logger from '@/utils/Logger';
 
 const logger = Logger.withTag('PlayScreen');
+
+// 屏幕方向模块在 Apple TV 上没有原生实现，顶层 import 会在加载时直接报错，所以只在非 TV 设备上按需加载
+type ScreenOrientationModule = typeof import("expo-screen-orientation");
+const loadScreenOrientation = (): ScreenOrientationModule | null => {
+  if (Platform.isTV) return null;
+  try {
+    return require("expo-screen-orientation");
+  } catch {
+    return null;
+  }
+};
+
+// 亮度和音量手势用到的两个原生模块，同样只在能用的设备上按需加载
+const loadBrightness = (): typeof import("expo-brightness") | null => {
+  if (Platform.isTV) return null;
+  try {
+    return require("expo-brightness");
+  } catch {
+    return null;
+  }
+};
+const loadVolumeManager = (): typeof import("react-native-volume-manager").VolumeManager | null => {
+  if (Platform.isTV || Platform.OS !== "android") return null;
+  try {
+    return require("react-native-volume-manager").VolumeManager;
+  } catch {
+    return null;
+  }
+};
 
 // 优化的加载动画组件
 const LoadingContainer = memo(
@@ -40,35 +70,25 @@ const LoadingContainer = memo(
 
 LoadingContainer.displayName = "LoadingContainer";
 
-// 移到组件外部避免重复创建
-const createResponsiveStyles = (deviceType: string) => {
-  const isMobile = deviceType === "mobile";
-  const isTablet = deviceType === "tablet";
-
-  return StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: "black",
-      // 移动端和平板端可能需要状态栏处理
-      ...(isMobile || isTablet ? { paddingTop: 0 } : {}),
-    },
-    videoContainer: {
-      ...StyleSheet.absoluteFillObject,
-      // 为触摸设备添加更多的交互区域
-      ...(isMobile || isTablet ? { zIndex: 1 } : {}),
-    },
-    videoPlayer: {
-      ...StyleSheet.absoluteFillObject,
-    },
-    loadingContainer: {
-      ...StyleSheet.absoluteFillObject,
-      backgroundColor: "rgba(0, 0, 0, 0.8)",
-      justifyContent: "center",
-      alignItems: "center",
-      zIndex: 10,
-    },
-  });
-};
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "black",
+  },
+  videoContainer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  videoPlayer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  loadingContainer: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
+  },
+});
 
 export default function PlayScreen() {
   const videoRef = useRef<Video>(null);
@@ -76,7 +96,42 @@ export default function PlayScreen() {
   useKeepAwake();
 
   // 响应式布局配置
-  const { deviceType } = useResponsiveLayout();
+  const { deviceType, isPortrait } = useResponsiveLayout();
+  // 触摸设备：竖屏时视频在上、选集面板在下；横屏时全屏沉浸播放
+  const touch = deviceType !== "tv";
+  const stacked = touch && isPortrait;
+
+  // 全屏按钮：把屏幕锁到横屏或竖屏。系统关闭了自动旋转时，这是进入全屏的唯一办法
+  const screenOrientation = useMemo(loadScreenOrientation, []);
+  // 只有用按钮进入的全屏才算；用户自己把手机转成横屏不算
+  const [enteredFullscreen, setEnteredFullscreen] = useState(false);
+  const setFullscreen = useCallback(async (fullscreen: boolean) => {
+    if (!screenOrientation) return;
+    try {
+      const { LANDSCAPE, PORTRAIT_UP } = screenOrientation.OrientationLock;
+      await screenOrientation.lockAsync(fullscreen ? LANDSCAPE : PORTRAIT_UP);
+      setEnteredFullscreen(fullscreen);
+    } catch (error) {
+      logger.warn("Failed to change screen orientation:", error);
+    }
+  }, [screenOrientation]);
+  // 离开播放页时把屏幕方向交还给系统
+  useEffect(() => () => { screenOrientation?.unlockAsync().catch(() => {}); }, [screenOrientation]);
+
+  // 手势：左半边上下滑调屏幕亮度（只改本应用窗口），右半边上下滑调系统媒体音量
+  const brightness = useMemo<LevelControl | undefined>(() => {
+    const module = loadBrightness();
+    return module ? { get: () => module.getBrightnessAsync(), set: value => { module.setBrightnessAsync(value).catch(() => {}); } } : undefined;
+  }, []);
+  const volume = useMemo<LevelControl | undefined>(() => {
+    const module = loadVolumeManager();
+    return module ? {
+      get: async () => (await module.getVolume()).volume,
+      set: value => { Promise.resolve(module.setVolume(value, { showUI: false, type: "music" })).catch(() => {}); },
+    } : undefined;
+  }, []);
+  // 离开播放页时恢复系统亮度
+  useEffect(() => () => { loadBrightness()?.restoreSystemBrightnessAsync().catch(() => {}); }, []);
 
   const {
     episodeIndex: episodeIndexStr,
@@ -108,6 +163,7 @@ export default function PlayScreen() {
     setVideoRef,
     handlePlaybackStatusUpdate,
     setShowControls,
+    togglePlayPause,
     // setShowNextEpisodeOverlay,
     reset,
     loadVideo,
@@ -122,15 +178,11 @@ export default function PlayScreen() {
     introEndTime,
     playbackRate,
     handlePlaybackStatusUpdate,
-    deviceType,
     detail: detail || undefined,
   });
 
   // TV遥控器处理 - 总是调用hook，但根据设备类型决定是否使用结果
   const tvRemoteHandler = useTVRemoteHandler();
-
-  // 优化的动态样式 - 使用useMemo避免重复计算
-  const dynamicStyles = useMemo(() => createResponsiveStyles(deviceType), [deviceType]);
 
   useEffect(() => {
     const perfStart = performance.now();
@@ -176,20 +228,30 @@ export default function PlayScreen() {
     };
   }, []);
 
+  // 返回：用按钮进入的全屏先退回竖屏，否则离开播放页
+  const leave = useCallback(() => {
+    if (touch && enteredFullscreen && !stacked) {
+      setFullscreen(false);
+    } else {
+      router.back();
+    }
+  }, [touch, enteredFullscreen, stacked, setFullscreen, router]);
+
   useEffect(() => {
     const backAction = () => {
-      if (showControls) {
+      // TV 上先收起控制栏；触摸设备上直接走 leave
+      if (showControls && !touch) {
         setShowControls(false);
         return true;
       }
-      router.back();
+      leave();
       return true;
     };
 
     const backHandler = BackHandler.addEventListener("hardwareBackPress", backAction);
 
     return () => backHandler.remove();
-  }, [showControls, setShowControls, router]);
+  }, [showControls, setShowControls, leave, touch]);
 
   useEffect(() => {
     let timeoutId: NodeJS.Timeout | null = null;
@@ -211,42 +273,61 @@ export default function PlayScreen() {
   }, [isLoading]);
 
   if (!isLoading && (!detail || !currentEpisode?.url)) {
-    return <ThemedView style={dynamicStyles.container}><CinemaState title="影片暂时无法播放" message="没有取得可用的播放地址，请重试或返回选择其他片源。" action={<View style={{ flexDirection: 'row', gap: 12 }}><CinemaButton label="返回影片" onPress={() => router.back()} /><CinemaButton label="重试播放" primary disabled={!source || !id || !title} onPress={() => { if (source && id && title) loadVideo({ source, id, title, episodeIndex, position }); }} /></View>} /></ThemedView>;
+    return <ThemedView style={styles.container}><CinemaState title="影片暂时无法播放" message="没有取得可用的播放地址，请重试或返回选择其他片源。" action={<View style={{ flexDirection: 'row', gap: 12 }}><CinemaButton label="返回影片" onPress={() => router.back()} /><CinemaButton label="重试播放" primary disabled={!source || !id || !title} onPress={() => { if (source && id && title) loadVideo({ source, id, title, episodeIndex, position }); }} /></View>} /></ThemedView>;
   }
 
   if (!detail) {
     return <VideoLoadingAnimation showProgressBar />;
   }
 
+  // Video 在所有设备和方向下都处于同一棵组件树的同一位置，旋转屏幕不会重新挂载视频
+  const video = (
+    <TouchableOpacity
+      activeOpacity={1}
+      style={styles.videoContainer}
+      onPress={onScreenPress}
+      disabled={touch} // 触摸设备的点击、双击和滑动都由上面的手势层处理
+    >
+      {/* 条件渲染Video组件：只有在有有效URL时才渲染 */}
+      {currentEpisode?.url ? (
+        <Video ref={videoRef} style={styles.videoPlayer} {...videoProps} />
+      ) : (
+        <LoadingContainer style={styles.loadingContainer} currentEpisode={currentEpisode} />
+      )}
+
+      {/* 触摸控制层自带可拖动进度条，只有 TV 需要这个快进提示 */}
+      {!touch && <SeekingBar />}
+
+      {/* 只在Video组件存在且正在加载时显示加载动画覆盖层 */}
+      {currentEpisode?.url && isLoading && (
+        <View style={styles.loadingContainer}>
+          <VideoLoadingAnimation showProgressBar />
+        </View>
+      )}
+
+      {/* <NextEpisodeOverlay visible={showNextEpisodeOverlay} onCancel={() => setShowNextEpisodeOverlay(false)} /> */}
+    </TouchableOpacity>
+  );
+  const overlay = touch ? (
+    <>
+      <CinemaTouchGestures onTap={onScreenPress} onDoubleTap={togglePlayPause} brightness={brightness} volume={volume} />
+      {showControls && (
+        <TouchPlayerControls
+          immersive={!stacked}
+          onInteract={tvRemoteHandler.resetTimer}
+          onBack={leave}
+          onFullscreen={screenOrientation ? () => setFullscreen(stacked) : undefined}
+        />
+      )}
+    </>
+  ) : showControls ? (
+    <PlayerControls showControls={showControls} setShowControls={setShowControls} />
+  ) : null;
+
   return (
-    <ThemedView focusable style={dynamicStyles.container}>
-      <TouchableOpacity
-        activeOpacity={1}
-        style={dynamicStyles.videoContainer}
-        onPress={onScreenPress}
-        disabled={deviceType !== "tv" && showControls} // 移动端和平板端在显示控制条时禁用触摸
-      >
-        {/* 条件渲染Video组件：只有在有有效URL时才渲染 */}
-        {currentEpisode?.url ? (
-          <Video ref={videoRef} style={dynamicStyles.videoPlayer} {...videoProps} />
-        ) : (
-          <LoadingContainer style={dynamicStyles.loadingContainer} currentEpisode={currentEpisode} />
-        )}
-
-
-        <SeekingBar />
-
-        {/* 只在Video组件存在且正在加载时显示加载动画覆盖层 */}
-        {currentEpisode?.url && isLoading && (
-          <View style={dynamicStyles.loadingContainer}>
-            <VideoLoadingAnimation showProgressBar />
-          </View>
-        )}
-
-        {/* <NextEpisodeOverlay visible={showNextEpisodeOverlay} onCancel={() => setShowNextEpisodeOverlay(false)} /> */}
-      </TouchableOpacity>
-
-      {showControls && deviceType === "tv" && <PlayerControls showControls={showControls} setShowControls={setShowControls} />}
+    <ThemedView focusable style={styles.container}>
+      <StatusBar hidden={touch && !stacked} />
+      <CinemaPlayerStage stacked={stacked} video={video} overlay={overlay} panel={<TouchPlayerPanel />} />
       <EpisodeSelectionModal />
       <SourceSelectionModal />
       <SpeedSelectionModal />
