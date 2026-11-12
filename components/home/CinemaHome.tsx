@@ -59,7 +59,7 @@ export default function CinemaHome(props: Props) {
     <View style={styles.screen}>
       {showContent && featured?.poster && (
         <View testID="home-backdrop" pointerEvents="none" style={styles.backdrop}>
-          <PosterImage uri={props.imageUrl(featured.poster)} style={styles.backdropImage} blurRadius={36} />
+          <PosterImage uri={props.imageUrl(featured.poster)} style={styles.backdropImage} blurRadius={8} />
           <LinearGradient colors={['rgba(16,18,20,0.78)', 'rgba(16,18,20,0.48)', 'rgba(16,18,20,0.28)']} locations={[0, 0.48, 1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.fill} />
           <LinearGradient colors={['rgba(16,18,20,0.22)', 'rgba(16,18,20,0.12)', 'rgba(16,18,20,0.72)']} locations={[0, 0.4, 1]} style={styles.fill} />
         </View>
