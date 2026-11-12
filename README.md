@@ -4,7 +4,7 @@
 
 连接 MoonTV / LunaTV 的电视与浏览器播放器。基于 [orion-lib/OrionTV](https://github.com/orion-lib/OrionTV) fork 开发，保留上游历史与来源说明。
 
-DuskTV 使用统一的深色影院界面：首页、搜索、影片详情、收藏、直播、设置和播放控制按照窗口宽度与高度调整比例。原生端支持 Android TV / Apple TV；本地浏览器客户端支持真实登录、搜索、收藏和观看记录同步，以及 MP4 / HLS 播放。浏览器播放器采用 Video.js 10 React 的完整控制栏，提供可拖动进度、音量、倍速、全屏、画中画与键盘操作；选集、换源及片头片尾设置保留暮映业务适配。
+DuskTV 使用统一的深色影院界面：首页、搜索、影片详情、收藏、直播、设置和播放控制按照窗口宽度与高度调整比例。原生端支持 Android 手机 / Android TV / Apple TV；本地浏览器客户端支持真实登录、搜索、收藏和观看记录同步，以及 MP4 / HLS 播放。浏览器播放器采用 Video.js 10 React 的完整控制栏，提供可拖动进度、音量、倍速、全屏、画中画与键盘操作；选集、换源及片头片尾设置保留暮映业务适配。
 
 ## 界面预览
 
@@ -47,7 +47,7 @@ DUSK_SERVER_URL=https://your-server.example
 - `npm run build` 生成浏览器产物，`npm run preview` 启动带接口桥接的本地预览。仅复制 `dist/` 到静态主机不能提供真实登录和媒体桥接。
 - 不要提交自己的 `.env.local`、私人服务器地址、登录信息或含个人数据的运行截图。文档截图仅使用独立演示数据。
 
-## 原生电视端
+## Android 手机与电视端
 
 需要 Yarn 1.x；Android 构建需要 Android SDK/JDK，Apple TV 构建需要完整 Xcode。
 
@@ -57,9 +57,23 @@ yarn start       # TV 模式 Metro
 yarn prebuild   # 生成原生工程
 yarn android    # Android TV
 yarn ios        # Apple TV
+yarn prebuild:android  # 生成 Android 手机工程
+yarn android:phone     # Android 手机
 ```
 
-原生应用名称为「暮映 · DuskTV」，应用标识为 `com.zhouhaojiang.dusktv`，深链协议为 `dusktv://`。更新地址指向本仓库，首次正式发行前关闭自动检查，不会安装上游 OrionTV 的更新包。
+原生应用名称为「暮映 · DuskTV」，应用标识为 `com.zhouhaojiang.dusktv`，深链协议为 `dusktv://`。手机和电视各有独立 APK，按安装包类型获取更新，不会因窗口尺寸变化而下载另一端的包。
+
+### 自动发布 APK
+
+1. 在仓库 Actions Secrets 配置 `ANDROID_KEYSTORE_BASE64`（JKS 文件的 Base64）、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD`。正式签名必须长期备份并沿用，缺少签名时发布构建会失败。
+2. 合并代码后，在 GitHub Releases 中创建并发布正式版本，标签使用 `v主版本.次版本.修订号`，例如 `v0.1.0`；每次发布使用更高的新版本。草稿和预发布不触发正式分发。次版本与修订号各不超过 999。
+3. Actions 自动构建 ARMv7/ARM64 通用的 `dusktv-android-v0.1.0.apk` 与 `dusktv-android-tv-v0.1.0.apk`，上传到该 Release，最后上传 `update.json` 与文件校验值。构建失败不会向客户端推送半成品更新；重跑不会覆盖已有不同内容的附件。
+
+版本名称和 Android `versionCode` 根据 Release 标签注入，发布时不必先修改 `package.json`。版本码规则为 `主版本 × 1000000 + 次版本 × 1000 + 修订号`。请通过 GitHub 网页或自己的凭据发布 Release；另一个工作流用默认 `GITHUB_TOKEN` 创建的 Release 不会触发本工作流。
+
+手机与 TV 均可在设置中检查更新；启动时至多每 12 小时检查一次，新版本会提示下载。下载后验证大小与 SHA-256，再打开系统安装器；首次安装需按系统提示允许暮映安装未知应用，并由用户确认安装。跳过版本只影响自动提醒，手动检查仍可安装。更新依赖设备能访问 GitHub API 和 Release 下载服务。
+
+PR 和手动运行工作流只生成测试 APK（debug 签名，保留 7 天），不会发布 Release，也不能用于验证正式签名包的覆盖升级。正式包存储在 Releases，不能用临时 Actions artifacts 替代。GitHub 标准托管 runner 对公开仓库免费；Release 单个附件须小于 2 GiB。参见 [Actions 计费](https://docs.github.com/en/billing/concepts/product-billing/github-actions) 和 [Release 配额](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)。
 
 ## 项目结构
 
@@ -73,6 +87,7 @@ yarn ios        # Apple TV
 
 ```sh
 yarn typecheck
+yarn test:release
 yarn jest --runInBand components/__tests__/SearchFlow.test.tsx components/__tests__/SettingsFlow.test.tsx
 cd preview
 npm run test:bridge

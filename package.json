@@ -7,9 +7,8 @@
     "start": "EXPO_TV=1 EXPO_USE_METRO_WORKSPACE_ROOT=1 expo start",
     "android": "EXPO_TV=1 EXPO_USE_METRO_WORKSPACE_ROOT=1 expo run:android",
     "ios": "EXPO_TV=1 EXPO_USE_METRO_WORKSPACE_ROOT=1 expo run:ios",
-    "prebuild": "EXPO_TV=1 EXPO_USE_METRO_WORKSPACE_ROOT=1 expo prebuild --clean && yarn copy-config",
-    "copy-config": "cp -r xml/* android/app/src/*",
-    "build": "NODE_ENV=production EXPO_TV=1 yarn prebuild && cd android && ./gradlew assembleRelease",
+    "prebuild": "EXPO_TV=1 expo prebuild --clean",
+    "build": "yarn build:tv",
     "build-debug": "cd android && ./gradlew assembleDebug",
     "test": "jest --watchAll",
     "test-ci": "jest --ci --coverage --no-cache",
@@ -17,7 +16,13 @@
     "typecheck": "tsc --noEmit",
     "clean": "expo r -c && yarn cache clean && cd android && ./gradlew clean",
     "clean-modules": "rm -rf node_modules && yarn install",
-    "reset-project": "./scripts/reset-project.js"
+    "reset-project": "./scripts/reset-project.js",
+    "prebuild:android": "DUSK_BUILD_TARGET=android EXPO_TV=0 expo prebuild --clean --platform android",
+    "prebuild:tv": "DUSK_BUILD_TARGET=android-tv EXPO_TV=1 expo prebuild --clean --platform android",
+    "build:tv": "DUSK_BUILD_TARGET=android-tv EXPO_TV=1 DUSK_RELEASE_BUILD=1 sh -c 'expo prebuild --clean --platform android && cd android && ./gradlew assembleRelease'",
+    "build:android": "DUSK_BUILD_TARGET=android EXPO_TV=0 DUSK_RELEASE_BUILD=1 sh -c 'expo prebuild --clean --platform android && cd android && ./gradlew assembleRelease'",
+    "android:phone": "DUSK_BUILD_TARGET=android EXPO_TV=0 expo run:android",
+    "test:release": "node --test scripts/release.test.cjs && jest --runInBand services/__tests__/updateService.test.ts stores/__tests__/updateStore.test.ts"
   },
   "jest": {
     "preset": "jest-expo"
@@ -64,7 +69,8 @@
     "react-native-toast-message": "^2.3.3",
     "react-native-volume-manager": "1.10.0",
     "react-native-web": "~0.19.10",
-    "zustand": "^5.0.6"
+    "zustand": "^5.0.6",
+    "expo-file-system": "~17.0.1"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
