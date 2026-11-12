@@ -27,8 +27,9 @@ export default function LiveScreen() {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => { setFullscreen(false); return true; });
     return () => subscription.remove();
   }, [fullscreen]);
+  // Android TV emits short presses on ACTION_UP (1) by default.
   useTVEventHandler(useCallback(event => {
-    if (!fullscreen || !channels.length || event.eventKeyAction === 1) return;
+    if (!fullscreen || !channels.length || event.eventKeyAction === 0) return;
     if (event.eventType === 'down') setFullscreen(false);
     if (event.eventType === 'left') setIndex(value => (value - 1 + channels.length) % channels.length);
     if (event.eventType === 'right') setIndex(value => (value + 1) % channels.length);
