@@ -1,5 +1,6 @@
+import CinemaLogin from './cinema/CinemaLogin';
 import React, { useState, useRef, useEffect } from "react";
-import { Modal, View, TextInput, StyleSheet, ActivityIndicator, Alert, Keyboard, InteractionManager } from "react-native";
+import { TextInput, Alert, Keyboard, InteractionManager } from "react-native";
 import { usePathname } from "expo-router";
 import Toast from "react-native-toast-message";
 import useAuthStore from "@/stores/authStore";
@@ -7,9 +8,6 @@ import { useSettingsStore } from "@/stores/settingsStore";
 import useHomeStore from "@/stores/homeStore";
 import { api } from "@/services/api";
 import { LoginCredentialsManager } from "@/services/storage";
-import { ThemedView } from "./ThemedView";
-import { ThemedText } from "./ThemedText";
-import { StyledButton } from "./StyledButton";
 
 const LoginModal = () => {
   const { isLoginModalVisible, hideLoginModal, checkLoginStatus } = useAuthStore();
@@ -18,6 +16,7 @@ const LoginModal = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
   const usernameInputRef = useRef<TextInput>(null);
   const passwordInputRef = useRef<TextInput>(null);
   const pathname = usePathname();
@@ -84,6 +83,8 @@ const LoginModal = () => {
       Toast.show({ type: "error", text1: "请输入用户名和密码" });
       return;
     }
+    if (isLoading) return;
+    setLoginError('');
     setIsLoading(true);
     try {
       await api.login(isLocalStorage ? undefined : username, password);
@@ -122,6 +123,7 @@ const LoginModal = () => {
       InteractionManager.runAfterInteractions(hideAndAlert);
 
     } catch (error) {
+      setLoginError(error instanceof Error ? error.message : '用户名或密码错误，请重试。');
       Toast.show({
         type: "error",
         text1: "登录失败",
@@ -132,102 +134,6 @@ const LoginModal = () => {
     }
   };
 
-  // Handle navigation between inputs using returnKeyType
-  const handleUsernameSubmit = () => {
-    passwordInputRef.current?.focus();
-  };
-
-  return (
-    <Modal
-      transparent={true}
-      visible={isLoginModalVisible && !isSettingsPage}
-      animationType="fade"
-      onRequestClose={hideLoginModal}
-    >
-      <View style={styles.overlay}>
-        <ThemedView style={styles.container}>
-          <ThemedText style={styles.title}>需要登录</ThemedText>
-          <ThemedText style={styles.subtitle}>服务器需要验证您的身份</ThemedText>
-          {serverConfig?.StorageType !== "localstorage" && (
-            <TextInput
-              ref={usernameInputRef}
-              style={styles.input}
-              placeholder="请输入用户名"
-              placeholderTextColor="#888"
-              value={username}
-              onChangeText={setUsername}
-              returnKeyType="next"
-              onSubmitEditing={handleUsernameSubmit}
-              blurOnSubmit={false}
-            />
-          )}
-          <TextInput
-            ref={passwordInputRef}
-            style={styles.input}
-            placeholder="请输入密码"
-            placeholderTextColor="#888"
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-            returnKeyType="go"
-            onSubmitEditing={handleLogin}
-          />
-          <StyledButton
-            text={isLoading ? "" : "登录"}
-            onPress={handleLogin}
-            disabled={isLoading}
-            style={styles.button}
-            hasTVPreferredFocus={!serverConfig || serverConfig.StorageType === "localstorage"}
-          >
-            {isLoading && <ActivityIndicator color="#fff" />}
-          </StyledButton>
-        </ThemedView>
-      </View>
-    </Modal>
-  );
+  return <CinemaLogin visible={isLoginModalVisible && !isSettingsPage} username={username} password={password} needsUsername={serverConfig?.StorageType !== 'localstorage'} loading={isLoading} error={loginError} onUsername={setUsername} onPassword={setPassword} onLogin={handleLogin} onClose={() => { Keyboard.dismiss(); hideLoginModal(); }} usernameRef={usernameInputRef} passwordRef={passwordInputRef} />;
 };
-
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  container: {
-    width: "80%",
-    maxWidth: 400,
-    padding: 24,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: "bold",
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: "#ccc",
-    marginBottom: 20,
-    textAlign: "center",
-  },
-  input: {
-    width: "100%",
-    height: 50,
-    backgroundColor: "#333",
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    color: "#fff",
-    fontSize: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: "#555",
-  },
-  button: {
-    width: "100%",
-    height: 50,
-  },
-});
-
 export default LoginModal;

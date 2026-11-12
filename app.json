@@ -34,8 +34,8 @@
     "experiments": {
       "typedRoutes": true
     },
-    "name": "OrionTV",
-    "slug": "OrionTV",
+    "name": "暮映 · DuskTV",
+    "slug": "dusktv",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "dark",
@@ -43,7 +43,7 @@
       "**/*"
     ],
     "android": {
-      "package": "com.oriontv",
+      "package": "com.zhouhaojiang.dusktv",
       "usesCleartextTraffic": true,
       "hardwareAcceleration": true,
       "networkSecurityConfig": "@xml/network_security_config",
@@ -59,7 +59,7 @@
           "action": "android.intent.action.VIEW",
           "data": [
             {
-              "scheme": "oriontv"
+              "scheme": "dusktv"
             }
           ],
           "category": [
@@ -70,7 +70,7 @@
       ]
     },
     "ios": {
-      "bundleIdentifier": "com.oriontv",
+      "bundleIdentifier": "com.zhouhaojiang.dusktv",
       "supportsTablet": true,
       "requireFullScreen": false,
       "supportedInterfaceOrientations": [
@@ -83,13 +83,10 @@
         "usesNonExemptEncryption": false
       }
     },
-    "scheme": "oriontv",
+    "scheme": "dusktv",
     "extra": {
       "router": {
         "origin": false
-      },
-      "eas": {
-        "projectId": "b4eddfdb-08cb-4ffc-828d-a27f493e10f7"
       }
     }
   }

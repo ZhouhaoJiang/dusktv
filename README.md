@@ -1,106 +1,70 @@
-# OrionTV 📺
+# 暮映 · DuskTV
 
-一个基于 React Native TVOS 和 Expo 构建的播放器，旨在提供流畅的视频观看体验。
+连接 MoonTV / LunaTV 的电视与浏览器播放器。基于 [orion-lib/OrionTV](https://github.com/orion-lib/OrionTV) fork 开发，保留上游历史与来源说明。
 
-## ✨ 功能特性
+DuskTV 使用统一的深色影院界面：首页、搜索、影片详情、收藏、直播、设置和播放控制按照窗口宽度与高度调整比例。原生端支持 Android TV / Apple TV；本地浏览器客户端支持真实登录、搜索、收藏和观看记录同步，以及 MP4 / HLS 播放。
 
-- **框架跨平台支持**: 同时支持构建 Apple TV 和 Android TV。
-- **现代化前端**: 使用 Expo、React Native TVOS 和 TypeScript 构建，性能卓越。
-- **Expo Router**: 基于文件系统的路由，使导航逻辑清晰简单。
-- **TV 优化的 UI**: 专为电视遥控器交互设计的用户界面。
+## 本地浏览器客户端
 
-## 🛠️ 技术栈
-
-- **前端**:
-  - [React Native TVOS](https://github.com/react-native-tvos/react-native-tvos)
-  - [Expo](https://expo.dev/) (~51.0)
-  - [Expo Router](https://docs.expo.dev/router/introduction/)
-  - [Expo AV](https://docs.expo.dev/versions/latest/sdk/av/)
-  - TypeScript
-
-## 📂 项目结构
-
-本项目采用类似 monorepo 的结构：
-
-```
-.
-├── app/              # Expo Router 路由和页面
-├── assets/           # 静态资源 (字体, 图片, TV 图标)
-├── components/       # React 组件
-├── constants/        # 应用常量 (颜色, 样式)
-├── hooks/            # 自定义 Hooks
-├── services/         # 服务层 (API, 存储)
-├── package.json      # 前端依赖和脚本
-└── ...
-```
-
-## 🚀 快速开始
-
-### 环境准备
-
-请确保您的开发环境中已安装以下软件：
-
-- [Node.js](https://nodejs.org/) (LTS 版本)
-- [Yarn](https://yarnpkg.com/)
-- [Expo CLI](https://docs.expo.dev/get-started/installation/)
-- [Xcode](https://developer.apple.com/xcode/) (用于 Apple TV 开发)
-- [Android Studio](https://developer.android.com/studio) (用于 Android TV 开发)
-
-### 项目启动
-
-接下来，在项目根目录运行前端应用：
+需要 Node.js 20.19+ 或 22.12+。
 
 ```sh
-
-# 安装依赖
-yarn
-
-# [首次运行或依赖更新后] 生成原生项目文件
-# 这会根据 app.json 中的配置修改原生代码以支持 TV
-yarn prebuild-tv
-
-# 运行在 Apple TV 模拟器或真机上
-yarn ios-tv
-
-# 运行在 Android TV 模拟器或真机上
-yarn android-tv
+cd preview
+npm ci
+npm run dev
 ```
 
-## 使用
+打开 `http://127.0.0.1:4318/`，在设置中填写自己的服务器地址并登录。也可以在未提交的 `preview/.env.local` 中设置：
 
-- 1.2.x 以上版本需配合 [MoonTV](https://github.com/senshinya/MoonTV) 使用。
+```dotenv
+DUSK_SERVER_URL=https://your-server.example
+```
 
+- 正常入口使用真实服务器数据；`?demo=1#home` 是独立的界面演示。
+- 本地接口桥接仅监听回环地址，处理服务器会话与媒体跨域。密码不写入项目或浏览器存储；上游 Cookie 仅保留在本地服务的内存中，重启服务后需重新登录。
+- `npm run build` 生成浏览器产物，`npm run preview` 启动带接口桥接的本地预览。仅复制 `dist/` 到静态主机不能提供真实登录和媒体桥接。
+- 不要提交自己的 `.env.local`、服务器地址、登录信息或运行截图。
 
-## 📜 主要脚本
+## 原生电视端
 
-- `yarn start`: 在手机模式下启动 Metro Bundler。
-- `yarn start-tv`: 在 TV 模式下启动 Metro Bundler。
-- `yarn ios-tv`: 在 Apple TV 上构建并运行应用。
-- `yarn android-tv`: 在 Android TV 上构建并运行应用。
-- `yarn prebuild-tv`: 为 TV 构建生成原生项目文件。
-- `yarn lint`: 检查代码风格
+需要 Yarn 1.x；Android 构建需要 Android SDK/JDK，Apple TV 构建需要完整 Xcode。
 
-## 📝 License
+```sh
+yarn install --frozen-lockfile
+yarn start       # TV 模式 Metro
+yarn prebuild   # 生成原生工程
+yarn android    # Android TV
+yarn ios        # Apple TV
+```
 
-本项目采用 MIT 许可证。
+原生应用名称为「暮映 · DuskTV」，应用标识为 `com.zhouhaojiang.dusktv`，深链协议为 `dusktv://`。更新地址指向本仓库，首次正式发行前关闭自动检查，不会安装上游 OrionTV 的更新包。
 
-## ⚠️ 免责声明
+## 项目结构
 
-OrionTV 仅作为视频搜索工具，不存储、上传或分发任何视频内容。所有视频均来自第三方 API 接口提供的搜索结果。如有侵权内容，请联系相应的内容提供方。
+- `app/`：Expo Router 页面与原生业务适配。
+- `components/cinema/`：共享导航、表单、列表、弹窗和页面布局。
+- `components/home/`：影院首页。
+- `stores/`、`services/`：原生状态、接口、存储与播放逻辑。
+- `preview/`：复用共享界面的浏览器客户端、本地接口桥接与演示。
 
-本项目开发者不对使用本项目产生的任何后果负责。使用本项目时，您必须遵守当地的法律法规。
+## 验证
 
-## 🌟 Star History
+```sh
+yarn typecheck
+yarn jest --runInBand components/__tests__/SearchFlow.test.tsx components/__tests__/SettingsFlow.test.tsx
+cd preview
+npm run test:bridge
+npm run build
+npm run qa
+npm run qa:connected
+```
 
-[![Star History Chart](https://api.star-history.com/svg?repos=zimplexing/OrionTV&type=Date)](https://www.star-history.com/#zimplexing/OrionTV&Date)
+浏览器 QA 需要本机 Chrome；连接模式 QA 还需要 FFmpeg，使用隔离的本地测试服务，不使用真实账户。可设置 `PREVIEW_URL` 指向其他本地端口。JavaScript/Hermes 导出不等同于 APK/IPA 构建或电视真机验证。
 
-## 🙏 致谢
+## 上游与许可
 
-本项目受到以下开源项目的启发：
+本项目 fork 自 [OrionTV](https://github.com/orion-lib/OrionTV)，感谢原作者和贡献者。上游 README 标注采用 MIT 许可证；本仓库保留上游的许可说明与 Git 历史。
 
-- [MoonTV](https://github.com/senshinya/MoonTV) - 一个基于 Next.js 的视频聚合应用
-- [LibreTV](https://github.com/LibreSpark/LibreTV) - 一个开源的视频流媒体应用
+DuskTV 仅作为视频搜索与播放工具，不存储、上传或分发影片；视频内容来自用户配置的第三方服务。如有侵权内容，请联系相应内容提供方。
 
-感谢以下项目提供 API Key 的赞助
-
-- [gpt-load](https://github.com/tbphp/gpt-load) - 一个高性能的 OpenAI 格式 API 多密钥轮询代理服务器，支持负载均衡，使用 Go 语言开发
+感谢 [MoonTV](https://github.com/senshinya/MoonTV)、[LibreTV](https://github.com/LibreSpark/LibreTV)、[React Native TVOS](https://github.com/react-native-tvos/react-native-tvos) 以及上游项目的贡献者。

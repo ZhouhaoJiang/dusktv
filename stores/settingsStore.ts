@@ -103,7 +103,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       processedApiBaseUrl = processedApiBaseUrl.slice(0, -1);
     }
 
-    if (!/^https?:\/\//i.test(processedApiBaseUrl)) {
+    if (processedApiBaseUrl && !/^https?:\/\//i.test(processedApiBaseUrl)) {
       const hostPart = processedApiBaseUrl.split("/")[0];
       // Simple check for IP address format.
       const isIpAddress = /^((\d{1,3}\.){3}\d{1,3})(:\d+)?$/.test(hostPart);
@@ -129,7 +129,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     api.setBaseUrl(processedApiBaseUrl);
     // Also update the URL in the state so the input field shows the processed URL
     set({ isModalVisible: false, apiBaseUrl: processedApiBaseUrl });
-    await get().fetchServerConfig();
+    if (processedApiBaseUrl) await get().fetchServerConfig();
+    else set({ serverConfig: null });
   },
   showModal: () => set({ isModalVisible: true }),
   hideModal: () => set({ isModalVisible: false }),

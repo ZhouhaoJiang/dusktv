@@ -26,3 +26,9 @@ web/**
 .roomodes
 yarn-errors.log
 coverage/
+# Local browser review artifacts
+preview/qa-artifacts/
+preview/*-review.png
+preview/*-mobile.png
+
+.env*.local

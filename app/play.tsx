@@ -3,6 +3,7 @@ import { StyleSheet, TouchableOpacity, BackHandler, AppState, AppStateStatus, Vi
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Video } from "expo-av";
 import { useKeepAwake } from "expo-keep-awake";
+import { CinemaButton, CinemaState } from '@/components/cinema/CinemaUI';
 import { ThemedView } from "@/components/ThemedView";
 import { PlayerControls } from "@/components/PlayerControls";
 import { EpisodeSelectionModal } from "@/components/EpisodeSelectionModal";
@@ -209,6 +210,10 @@ export default function PlayScreen() {
     };
   }, [isLoading]);
 
+  if (!isLoading && (!detail || !currentEpisode?.url)) {
+    return <ThemedView style={dynamicStyles.container}><CinemaState title="影片暂时无法播放" message="没有取得可用的播放地址，请重试或返回选择其他片源。" action={<View style={{ flexDirection: 'row', gap: 12 }}><CinemaButton label="返回影片" onPress={() => router.back()} /><CinemaButton label="重试播放" primary disabled={!source || !id || !title} onPress={() => { if (source && id && title) loadVideo({ source, id, title, episodeIndex, position }); }} /></View>} /></ThemedView>;
+  }
+
   if (!detail) {
     return <VideoLoadingAnimation showProgressBar />;
   }
@@ -228,9 +233,6 @@ export default function PlayScreen() {
           <LoadingContainer style={dynamicStyles.loadingContainer} currentEpisode={currentEpisode} />
         )}
 
-        {showControls && deviceType === "tv" && (
-          <PlayerControls showControls={showControls} setShowControls={setShowControls} />
-        )}
 
         <SeekingBar />
 
@@ -244,6 +246,7 @@ export default function PlayScreen() {
         {/* <NextEpisodeOverlay visible={showNextEpisodeOverlay} onCancel={() => setShowNextEpisodeOverlay(false)} /> */}
       </TouchableOpacity>
 
+      {showControls && deviceType === "tv" && <PlayerControls showControls={showControls} setShowControls={setShowControls} />}
       <EpisodeSelectionModal />
       <SourceSelectionModal />
       <SpeedSelectionModal />

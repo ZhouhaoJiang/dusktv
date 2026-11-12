@@ -11,5 +11,5 @@ assignees: ''
 A clear and concise description of what the bug is.
 
 **Version**
-- OrionTV:
+- DuskTV:
 - LunaTV or MoonTV:

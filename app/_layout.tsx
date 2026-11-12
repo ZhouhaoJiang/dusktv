@@ -3,9 +3,9 @@ import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
-import { Platform, View, StyleSheet } from "react-native";
+import { Platform, StyleSheet } from "react-native";
 import Toast from "react-native-toast-message";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useRemoteControlStore } from "@/stores/remoteControlStore";
@@ -83,7 +83,7 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-        <View style={styles.container}>
+        <SafeAreaView style={styles.container}>
           <Stack>
             <Stack.Screen name="index" options={{ headerShown: false }} />
             <Stack.Screen name="detail" options={{ headerShown: false }} />
@@ -94,7 +94,7 @@ export default function RootLayout() {
             <Stack.Screen name="favorites" options={{ headerShown: false }} />
             <Stack.Screen name="+not-found" />
           </Stack>
-        </View>
+        </SafeAreaView>
         <Toast />
         <LoginModal />
         <UpdateModal />
@@ -106,5 +106,6 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#101214",
   },
 });

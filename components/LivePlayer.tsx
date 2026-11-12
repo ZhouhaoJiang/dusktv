@@ -1,6 +1,8 @@
 import React, { useRef, useState, useEffect } from "react";
 import { View, StyleSheet, Text, ActivityIndicator } from "react-native";
 import { Video, ResizeMode, AVPlaybackStatus } from "expo-av";
+import { CinemaButton } from '@/components/cinema/CinemaUI';
+import { cinema as c } from '@/constants/CinemaTheme';
 import { useKeepAwake } from "expo-keep-awake";
 
 interface LivePlayerProps {
@@ -13,6 +15,7 @@ const PLAYBACK_TIMEOUT = 15000; // 15 seconds
 
 export default function LivePlayer({ streamUrl, channelTitle, onPlaybackStatusUpdate }: LivePlayerProps) {
   const video = useRef<Video>(null);
+  const [attempt, setAttempt] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isTimeout, setIsTimeout] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -40,7 +43,7 @@ export default function LivePlayer({ streamUrl, channelTitle, onPlaybackStatusUp
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [streamUrl]);
+  }, [streamUrl, attempt]);
 
   const handlePlaybackStatusUpdate = (status: AVPlaybackStatus) => {
     if (status.isLoaded) {
@@ -68,7 +71,7 @@ export default function LivePlayer({ streamUrl, channelTitle, onPlaybackStatusUp
   if (!streamUrl) {
     return (
       <View style={styles.container}>
-        <Text style={styles.messageText}>按向下键选择频道</Text>
+        <Text style={styles.messageText}>选择一个频道开始观看</Text>
       </View>
     );
   }
@@ -76,7 +79,8 @@ export default function LivePlayer({ streamUrl, channelTitle, onPlaybackStatusUp
   if (isTimeout) {
     return (
       <View style={styles.container}>
-        <Text style={styles.messageText}>加载失败，请重试</Text>
+        <Text style={styles.messageText}>频道暂时无法播放</Text>
+        <CinemaButton label="重新连接" primary onPress={() => setAttempt(value => value + 1)} />
       </View>
     );
   }
@@ -84,6 +88,7 @@ export default function LivePlayer({ streamUrl, channelTitle, onPlaybackStatusUp
   return (
     <View style={styles.container}>
       <Video
+        key={`${streamUrl}:${attempt}`}
         ref={video}
         style={styles.video}
         source={{
@@ -92,14 +97,14 @@ export default function LivePlayer({ streamUrl, channelTitle, onPlaybackStatusUp
         resizeMode={ResizeMode.CONTAIN}
         shouldPlay
         onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-        onError={(e) => {
+        onError={() => {
           setIsTimeout(true);
           setIsLoading(false);
         }}
       />
       {isLoading && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#fff" />
+          <ActivityIndicator size="large" color={c.accent} />
           <Text style={styles.messageText}>加载中...</Text>
         </View>
       )}
@@ -118,6 +123,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#000",
+    gap: 16,
   },
   video: {
     flex: 1,
@@ -129,14 +135,14 @@ const styles = StyleSheet.create({
     left: 20,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
     padding: 10,
-    borderRadius: 5,
+    borderRadius: 12,
   },
   title: {
-    color: "#fff",
+    color: c.text,
     fontSize: 18,
   },
   messageText: {
-    color: "#fff",
+    color: c.text,
     fontSize: 16,
     marginTop: 10,
   },

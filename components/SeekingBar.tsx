@@ -1,4 +1,5 @@
 import React from "react";
+import { cinema } from "@/constants/CinemaTheme";
 import { View, StyleSheet, Text } from "react-native";
 import usePlayerStore from "@/stores/playerStore";
 
@@ -52,7 +53,7 @@ export const SeekingBar = () => {
 const styles = StyleSheet.create({
   seekingContainer: {
     position: "absolute",
-    bottom: 80,
+    bottom: 56,
     left: "5%",
     right: "5%",
     alignItems: "center",
@@ -80,7 +81,7 @@ const styles = StyleSheet.create({
   },
   seekingBarFilled: {
     height: "100%",
-    backgroundColor: "#fff",
+    backgroundColor: cinema.accent,
     borderRadius: 2.5,
   },
 });

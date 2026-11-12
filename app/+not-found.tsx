@@ -1,33 +1,7 @@
-import { Link, Stack } from "expo-router";
-import { StyleSheet } from "react-native";
-
-import { ThemedText } from "@/components/ThemedText";
-import { ThemedView } from "@/components/ThemedView";
-import React from "react";
-
+import React from 'react';
+import { CinemaButton, CinemaShell, CinemaState } from '@/components/cinema/CinemaUI';
+import { useCinemaNavigation } from '@/hooks/useCinemaNavigation';
 export default function NotFoundScreen() {
-  return (
-    <>
-      <Stack.Screen options={{ title: "Oops!" }} />
-      <ThemedView style={styles.container}>
-        <ThemedText type="title">This screen doesn't exist.</ThemedText>
-        <Link href="/" style={styles.link}>
-          <ThemedText type="link">Go to home screen!</ThemedText>
-        </Link>
-      </ThemedView>
-    </>
-  );
+  const navigation = useCinemaNavigation();
+  return <CinemaShell {...navigation}><CinemaState title="这个页面暂时找不到" message="回到首页，继续浏览影片。" action={<CinemaButton label="回到首页" primary onPress={() => navigation.onNavigate('home')} />} /></CinemaShell>;
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 20,
-  },
-  link: {
-    marginTop: 15,
-    paddingVertical: 15,
-  },
-});

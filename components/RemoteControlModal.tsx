@@ -1,82 +1,14 @@
-import React from "react";
-import { Modal, View, StyleSheet } from "react-native";
-import QRCode from "react-native-qrcode-svg";
-import { useRemoteControlStore } from "@/stores/remoteControlStore";
-import { ThemedView } from "./ThemedView";
-import { ThemedText } from "./ThemedText";
-import { StyledButton } from "./StyledButton";
-
-export const RemoteControlModal: React.FC = () => {
+import React from 'react';
+import { Text, View } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
+import { useRemoteControlStore } from '@/stores/remoteControlStore';
+import { cinema as c } from '@/constants/CinemaTheme';
+import { CinemaDialog, useCinemaLayout } from './cinema/CinemaUI';
+export const RemoteControlModal = () => {
   const { isModalVisible, hideModal, serverUrl, error } = useRemoteControlStore();
-
-  return (
-    <Modal animationType="fade" transparent={true} visible={isModalVisible} onRequestClose={hideModal}>
-      <View style={styles.modalContainer}>
-        <ThemedView style={styles.modalContent}>
-          <ThemedText style={styles.title}>手机扫码</ThemedText>
-          <View style={styles.qrContainer}>
-            {serverUrl ? (
-              <>
-                <QRCode value={serverUrl} size={200} backgroundColor="white" color="black" />
-              </>
-            ) : (
-              <ThemedText style={styles.statusText}>{error ? `错误: ${error}` : "正在生成二维码..."}</ThemedText>
-            )}
-          </View>
-          <ThemedText style={styles.instructions}>
-            使用手机扫描上方二维码，即可在浏览器中向 TV 发送消息。或者访问{serverUrl}
-          </ThemedText>
-          <StyledButton text="关闭" onPress={hideModal} style={styles.button} variant="primary" />
-        </ThemedView>
-      </View>
-    </Modal>
-  );
+  const { scale } = useCinemaLayout();
+  return <CinemaDialog visible={isModalVisible} title="用手机输入" onClose={hideModal}>
+    <Text style={{ color: c.secondary, fontSize: 15 * scale, lineHeight: 24 * scale }}>手机和电视连接同一网络后，扫码打开遥控页面。</Text>
+    {serverUrl ? <><View style={{ padding: 18, backgroundColor: '#fff', borderRadius: 18, alignSelf: 'center', marginVertical: 10 }}><QRCode value={serverUrl} size={190} backgroundColor="#fff" color="#101214" /></View><Text selectable style={{ color: c.secondary, fontSize: 14 * scale, textAlign: 'center' }}>{serverUrl}</Text></> : <Text style={{ color: error ? '#F0A49B' : c.secondary, textAlign: 'center', paddingVertical: 36 }}>{error || '正在准备遥控连接…'}</Text>}
+  </CinemaDialog>;
 };
-
-const styles = StyleSheet.create({
-  modalContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
-  },
-  modalContent: {
-    width: "85%",
-    maxWidth: 400,
-    padding: 24,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: 10,
-    paddingTop: 10,
-  },
-  qrContainer: {
-    width: 220,
-    height: 220,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#f0f0f0",
-    borderRadius: 8,
-    marginBottom: 20,
-  },
-  statusText: {
-    textAlign: "center",
-    fontSize: 16,
-  },
-  serverUrlText: {
-    marginTop: 10,
-    fontSize: 12,
-  },
-  instructions: {
-    textAlign: "center",
-    marginBottom: 24,
-    fontSize: 16,
-    color: "#ccc",
-  },
-  button: {
-    width: "100%",
-  },
-});
