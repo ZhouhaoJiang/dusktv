@@ -1,8 +1,8 @@
 import { useUpdateStore, initUpdateStore } from '../updateStore';
-import service from '../../services/updateService';
+import service, { ApkMissingError } from '../../services/updateService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
-jest.mock('../../services/updateService', () => ({ __esModule: true, default: { getCurrentVersion: () => '0.1.0', checkVersion: jest.fn(), isUpdateAvailable: () => true, downloadApk: jest.fn(), installApk: jest.fn() } }));
+jest.mock('../../services/updateService', () => ({ __esModule: true, ApkMissingError: class extends Error {}, default: { getCurrentVersion: () => '0.1.0', checkVersion: jest.fn(), isUpdateAvailable: () => true, downloadApk: jest.fn(), installApk: jest.fn() } }));
 jest.mock('@react-native-async-storage/async-storage', () => ({ getItem: jest.fn(), setItem: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('react-native-toast-message', () => ({ show: jest.fn() }));
 const info = { version: '0.2.0', versionCode: 2000, downloadUrl: 'url', sha256: 'hash', size: 10 };
@@ -40,4 +40,14 @@ test('initialization completes even when storage fails', async () => {
   (AsyncStorage.getItem as jest.Mock).mockRejectedValue(new Error('storage'));
   await expect(initUpdateStore()).rejects.toThrow('storage');
   expect(useUpdateStore.getState().initialized).toBe(true);
+});
+
+test('cache eviction allows a fresh download while install permission errors retain the APK', async () => {
+  useUpdateStore.setState({ downloadedPath: 'cached.apk' });
+  (service.installApk as jest.Mock).mockRejectedValueOnce(new Error('permission'));
+  await useUpdateStore.getState().installUpdate();
+  expect(useUpdateStore.getState().downloadedPath).toBe('cached.apk');
+  (service.installApk as jest.Mock).mockRejectedValueOnce(new ApkMissingError('missing'));
+  await useUpdateStore.getState().installUpdate();
+  expect(useUpdateStore.getState().downloadedPath).toBeNull();
 });

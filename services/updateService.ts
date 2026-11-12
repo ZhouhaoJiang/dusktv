@@ -7,6 +7,7 @@ import { version as packageVersion } from '../package.json';
 import { UPDATE_CONFIG } from '../constants/UpdateConfig';
 
 type BuildTarget = 'android' | 'android-tv';
+export class ApkMissingError extends Error {}
 export interface VersionInfo {
   version: string;
   versionCode: number;
@@ -116,7 +117,7 @@ class UpdateService {
   async installApk(fileUri: string): Promise<void> {
     if (Platform.OS !== 'android') throw new Error('仅支持 Android 安装更新');
     const file = await FileSystem.getInfoAsync(fileUri);
-    if (!file.exists) throw new Error('安装文件已被清理，请重新下载');
+    if (!file.exists) throw new ApkMissingError('安装文件已被清理，请重新下载');
     const contentUri = await FileSystem.getContentUriAsync(fileUri);
     try {
       await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {

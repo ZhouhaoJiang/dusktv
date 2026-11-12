@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import updateService, { VersionInfo } from '../services/updateService';
+import updateService, { ApkMissingError, VersionInfo } from '../services/updateService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 
@@ -98,15 +98,17 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
       set({ showUpdateModal: false });
     } catch (error) {
       // Keep the verified APK so permission errors can be retried without downloading again.
-      set({ error: error instanceof Error ? error.message : '安装失败' });
+      set({ error: error instanceof Error ? error.message : '安装失败', ...(error instanceof ApkMissingError ? { downloadedPath: null, downloadProgress: 0 } : {}) });
     }
   },
   setShowUpdateModal: show => set({ showUpdateModal: show }),
   skipThisVersion: async () => {
     const { remoteVersion } = get();
     if (!remoteVersion) return;
-    await AsyncStorage.setItem(STORAGE_KEYS.SKIP_VERSION, remoteVersion);
-    set({ skipVersion: remoteVersion, showUpdateModal: false });
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.SKIP_VERSION, remoteVersion);
+      set({ skipVersion: remoteVersion, showUpdateModal: false });
+    } catch { set({ error: '无法保存跳过版本设置，请重试' }); }
   },
   reset: () => {
     if (get().downloading) return;
