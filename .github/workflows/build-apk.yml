@@ -78,6 +78,7 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/dusktv-release.jks"
       - name: Generate native Android project
         env:
+          NODE_ENV: production
           ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/dusktv-release.jks
           ANDROID_KEYSTORE_PASSWORD: ${{ github.event_name == 'release' && secrets.ANDROID_KEYSTORE_PASSWORD || '' }}
           ANDROID_KEY_ALIAS: ${{ github.event_name == 'release' && secrets.ANDROID_KEY_ALIAS || '' }}
@@ -86,6 +87,7 @@ jobs:
       - name: Build APK
         working-directory: android
         env:
+          NODE_ENV: production
           ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/dusktv-release.jks
           ANDROID_KEYSTORE_PASSWORD: ${{ github.event_name == 'release' && secrets.ANDROID_KEYSTORE_PASSWORD || '' }}
           ANDROID_KEY_ALIAS: ${{ github.event_name == 'release' && secrets.ANDROID_KEY_ALIAS || '' }}
