@@ -30,7 +30,7 @@ export default function RootLayout() {
   const { loadSettings, remoteInputEnabled, apiBaseUrl } = useSettingsStore();
   const { startServer, stopServer } = useRemoteControlStore();
   const { checkLoginStatus } = useAuthStore();
-  const { checkForUpdate, lastCheckTime } = useUpdateStore();
+  const { checkForUpdate, lastCheckTime, initialized } = useUpdateStore();
   const responsiveConfig = useResponsiveLayout();
 
   useEffect(() => {
@@ -38,7 +38,7 @@ export default function RootLayout() {
       await loadSettings();
     };
     initializeApp();
-    initUpdateStore(); // 初始化更新存储
+    initUpdateStore().catch(error => logger.warn('初始化更新存储失败', error));
   }, [loadSettings]);
 
   useEffect(() => {
@@ -58,14 +58,14 @@ export default function RootLayout() {
 
   // 检查更新
   useEffect(() => {
-    if (loaded && UPDATE_CONFIG.AUTO_CHECK && Platform.OS === 'android') {
+    if (loaded && initialized && UPDATE_CONFIG.AUTO_CHECK && Platform.OS === 'android') {
       // 检查是否需要自动检查更新
       const shouldCheck = Date.now() - lastCheckTime > UPDATE_CONFIG.CHECK_INTERVAL;
       if (shouldCheck) {
         checkForUpdate(true); // 静默检查
       }
     }
-  }, [loaded, lastCheckTime, checkForUpdate]);
+  }, [loaded, initialized, lastCheckTime, checkForUpdate]);
 
   useEffect(() => {
     // 只有在非手机端才启动远程控制服务器

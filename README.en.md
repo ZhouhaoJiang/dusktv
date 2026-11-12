@@ -47,19 +47,33 @@ DUSK_SERVER_URL=https://your-server.example
 - `npm run build` builds the browser client. `npm run preview` starts a local preview with the API bridge. Copying `dist/` to a static host alone does not provide authentication or media bridging.
 - Do not commit `.env.local`, private server addresses, credentials, or screenshots containing personal data. Documentation screenshots use isolated demo data only.
 
-## Native TV app
+## Android phone and TV apps
 
-Requires Yarn 1.x. Android builds also need the Android SDK and JDK; Apple TV builds require a full Xcode installation.
+Use Yarn 1.x, Android SDK and JDK 17. Apple TV builds require full Xcode.
 
 ```sh
 yarn install --frozen-lockfile
-yarn start       # Metro in TV mode
-yarn prebuild    # Generate native projects
-yarn android     # Android TV
-yarn ios         # Apple TV
+yarn start             # TV Metro server
+yarn prebuild:tv       # Android TV native project
+yarn android           # Android TV
+yarn prebuild:android  # Android phone native project
+yarn android:phone     # Android phone
+yarn ios               # Apple TV
 ```
 
-The native application name is “暮映 · DuskTV”, its application ID is `com.zhouhaojiang.dusktv`, and its deep-link scheme is `dusktv://`. Updates point to this repository. Automatic update checks are disabled until the first official release; the app will not install upstream OrionTV update packages.
+The app ID is `com.zhouhaojiang.dusktv`, with the `dusktv://` deep link scheme. Phone and TV use separate APKs; update selection follows the installed build target, not screen dimensions.
+
+### Automatic APK releases
+
+1. Configure these repository Actions Secrets: `ANDROID_KEYSTORE_BASE64` (Base64-encoded JKS), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD`. Back up and reuse the release signing key permanently. Missing credentials fail release builds.
+2. After merging, publish a stable GitHub Release with a new, increasing `vMAJOR.MINOR.PATCH` tag, such as `v0.1.0`. Drafts and prereleases are not distributed. Minor and patch must each be at most 999.
+3. Actions builds ARMv7/ARM64 universal APKs named `dusktv-android-v0.1.0.apk` and `dusktv-android-tv-v0.1.0.apk`. Both are uploaded to that Release before the update manifest becomes available. Failed builds do not advertise partial updates; retries do not replace existing assets with different contents.
+
+Release tags supply the app version and Android `versionCode` (`MAJOR * 1000000 + MINOR * 1000 + PATCH`), without requiring a package.json edit. Publish through the GitHub UI or your own credentials: releases created by another workflow's default `GITHUB_TOKEN` do not trigger this workflow.
+
+Both apps have a manual update check in Settings and check on startup at most once every 12 hours. New versions prompt for download; APK size and SHA-256 are verified before opening the system installer. Users must allow installation from this app when prompted and confirm installation. Skipping a version only suppresses automatic prompts. Devices need access to the GitHub API and Release download service.
+
+PR and manually dispatched builds produce test-only APKs signed with the debug key (7-day retention). They do not publish releases and cannot test upgrades over production-signed installations. Production APKs live in Releases, not temporary Actions artifacts. Standard hosted runners are free for public repositories; individual Release assets must be under 2 GiB. See [Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions) and [Release quotas](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases).
 
 ## Project structure
 
@@ -73,6 +87,7 @@ The native application name is “暮映 · DuskTV”, its application ID is `co
 
 ```sh
 yarn typecheck
+yarn test:release
 yarn jest --runInBand components/__tests__/SearchFlow.test.tsx components/__tests__/SettingsFlow.test.tsx
 cd preview
 npm run test:bridge

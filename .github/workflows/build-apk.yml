@@ -1,57 +1,147 @@
-name: Build Android APK
+name: Build Android APKs
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
+  pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'preview/**'
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: android-${{ github.event.release.tag_name || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'release' }}
 
 jobs:
-  direct_build:
-    name: Build Android TV APK
-    runs-on: ubuntu-latest
+  validate:
+    if: github.event_name != 'release' || !github.event.release.prerelease
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v3
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 18
-          cache: "yarn"
+          node-version: '20'
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - name: Resolve version
+        id: version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          tag="${RELEASE_TAG:-v$(node -p "require('./package.json').version")}"
+          node scripts/release.cjs version "$tag" >> "$GITHUB_OUTPUT"
+      - run: yarn typecheck
+      - run: yarn test:release
 
-      - name: Install dependencies
-        run: yarn install --frozen-lockfile
-
-      - name: Get version from package.json
-        id: package-version
-        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
-
-      - name: Setup JDK
-        uses: actions/setup-java@v3
+  build:
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [android, android-tv]
+    env:
+      DUSK_BUILD_TARGET: ${{ matrix.target }}
+      EXPO_TV: ${{ matrix.target == 'android-tv' && '1' || '0' }}
+      DUSK_RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+      DUSK_RELEASE_BUILD: ${{ github.event_name == 'release' && '1' || '0' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          distribution: "zulu"
-          java-version: "17"
-
-      - name: Prebuild TV App
-        run: yarn prebuild
-
-      - name: Build TV APK
-        run: yarn build
-
-      - name: Rename APK file
+          node-version: '20'
+          cache: yarn
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - run: yarn install --frozen-lockfile
+      - name: Prepare release signing key
+        if: github.event_name == 'release'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$KEYSTORE_BASE64" || { echo 'Missing ANDROID_KEYSTORE_BASE64 secret'; exit 1; }
+          umask 077
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/dusktv-release.jks"
+      - name: Generate native Android project
+        env:
+          NODE_ENV: production
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/dusktv-release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ github.event_name == 'release' && secrets.ANDROID_KEYSTORE_PASSWORD || '' }}
+          ANDROID_KEY_ALIAS: ${{ github.event_name == 'release' && secrets.ANDROID_KEY_ALIAS || '' }}
+          ANDROID_KEY_PASSWORD: ${{ github.event_name == 'release' && secrets.ANDROID_KEY_PASSWORD || '' }}
+        run: yarn expo prebuild --clean --platform android --no-install
+      - name: Build APK
+        working-directory: android
+        env:
+          NODE_ENV: production
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/dusktv-release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ github.event_name == 'release' && secrets.ANDROID_KEYSTORE_PASSWORD || '' }}
+          ANDROID_KEY_ALIAS: ${{ github.event_name == 'release' && secrets.ANDROID_KEY_ALIAS || '' }}
+          ANDROID_KEY_PASSWORD: ${{ github.event_name == 'release' && secrets.ANDROID_KEY_PASSWORD || '' }}
+        run: ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=armeabi-v7a,arm64-v8a
+      - name: Collect APK
         run: |
           mkdir -p artifacts
-          cp android/app/build/outputs/apk/release/app-release.apk artifacts/dusktv.${{ steps.package-version.outputs.version }}.apk
-
-      - name: Create Release and Upload APK
-        uses: softprops/action-gh-release@v2
+          cp android/app/build/outputs/apk/release/app-release.apk "artifacts/dusktv-${DUSK_BUILD_TARGET}-v${DUSK_RELEASE_VERSION}.apk"
+      - uses: actions/upload-artifact@v4
         with:
-          tag_name: v${{ steps.package-version.outputs.version }}
-          name: Release v${{ steps.package-version.outputs.version }}
-          body: Automated release for version v${{ steps.package-version.outputs.version }}.
-          draft: false
-          prerelease: false
-          files: artifacts/dusktv.${{ steps.package-version.outputs.version }}.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: ${{ github.event_name == 'release' && 'release' || 'test-only' }}-${{ matrix.target }}
+          path: artifacts/*.apk
+          retention-days: 7
+          if-no-files-found: error
+      - name: Remove signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/dusktv-release.jks"
+
+  publish:
+    if: github.event_name == 'release'
+    needs: [validate, build]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      VERSION: ${{ needs.validate.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: artifacts
+          merge-multiple: true
+      - name: Generate update manifest and checksums
+        run: |
+          node scripts/release.cjs manifest "$VERSION" artifacts "$GH_REPO"
+          cd artifacts
+          sha256sum *.apk > SHA256SUMS
+      - name: Upload packages, then expose the update
+        run: |
+          # Retrying a partial upload is safe; never overwrite an existing APK or manifest.
+          for asset in artifacts/*.apk artifacts/SHA256SUMS artifacts/update.json; do
+            name="$(basename "$asset")"
+            if gh release view "v$VERSION" --json assets --jq '.assets[].name' | grep -Fxq "$name"; then
+              mkdir -p existing
+              gh release download "v$VERSION" --pattern "$name" --dir existing
+              cmp "$asset" "existing/$name" || { echo "Existing asset differs: $name; publish a new version"; exit 1; }
+            else
+              gh release upload "v$VERSION" "$asset"
+            fi
+          done
