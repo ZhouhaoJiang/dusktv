@@ -40,8 +40,6 @@ export default function CinemaHome(props: Props) {
   const categoryHeight = (props.selectedCategory.tags?.length ? 108 : 62) * scale;
   const cardHeightBudget = height - 78 * scale - heroHeight - categoryHeight - 110 * scale - 26;
   const cardWidth = compact ? Math.floor((width - gutter * 2) / 2.2) : Math.max(106 * scale, Math.min(210 * scale, cardHeightBudget / 1.5 + 10));
-  const heroPosterHeight = compact ? width * 0.41 : heroHeight - 24 * scale;
-  const heroContentWidth = width - 2 * gutter;
 
   const [focusedKey, setFocusedKey] = useState('');
   const list = useRef<FlatList<CinemaItem>>(null);
@@ -70,9 +68,6 @@ export default function CinemaHome(props: Props) {
       <ScrollView ref={scroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 * scale }}>
         {showContent && featured && (
           <View testID="home-feature" style={{ height: heroHeight, paddingHorizontal: gutter, justifyContent: 'center', alignItems: 'flex-start' }}>
-            {!!featured.poster && <View pointerEvents="none" style={{ position: 'absolute', right: compact ? gutter : undefined, left: compact ? undefined : gutter + Math.min(heroContentWidth * 0.60, 760 * scale), top: 10 * scale, width: heroPosterHeight * 2 / 3, height: heroPosterHeight, borderRadius: 10 * scale, overflow: 'hidden' }}>
-              <PosterImage uri={props.imageUrl(featured.poster)} style={styles.fill} />
-            </View>}
             <View style={{ width: compact ? '58%' : '52%', gap: 12 * scale }}>
               <View style={[styles.nav, { gap: 9 * scale }]}>
                 {resume ? <Play size={14 * scale} color={c.accent} /> : <Tv size={15 * scale} color={c.accent} />}

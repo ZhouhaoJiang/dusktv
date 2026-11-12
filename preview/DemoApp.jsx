@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import CinemaHome from '../components/home/CinemaHome';
 import CinemaSearch from '../components/cinema/CinemaSearch';
@@ -6,7 +6,8 @@ import CinemaDetail from '../components/cinema/CinemaDetail';
 import CinemaLibrary from '../components/cinema/CinemaLibrary';
 import CinemaSettings from '../components/cinema/CinemaSettings';
 import CinemaLive from '../components/cinema/CinemaLive';
-import CinemaPlayer from '../components/cinema/CinemaPlayer';
+import ConnectedPlayer from './ConnectedPlayer';
+import BrowserVideo from './BrowserVideo';
 import CinemaChoiceDialog from '../components/cinema/CinemaChoiceDialog';
 import CinemaLogin from '../components/cinema/CinemaLogin';
 import CinemaUpdate from '../components/cinema/CinemaUpdate';
@@ -24,6 +25,7 @@ export function usePreviewKeyboard() {
   useEffect(() => {
     function navigate(event) {
       if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+      if (event.defaultPrevented || event.target.closest?.('.dusk-player')) return;
       if (document.activeElement?.tagName === 'INPUT' && !['ArrowUp', 'ArrowDown'].includes(event.key)) return;
       const scope = [...document.querySelectorAll('[aria-modal="true"]')].at(-1) || document;
       const buttons = [...scope.querySelectorAll('[role="button"]:not([aria-disabled="true"]),input')].filter(el => el.getBoundingClientRect().width > 0 && !el.closest('[aria-hidden="true"]'));
@@ -45,20 +47,10 @@ export function usePreviewKeyboard() {
   }, []);
 }
 function DemoPlayer({ movie, onBack }) {
-  const video = useRef(null);
-  const [playing, setPlaying] = useState(false), [position, setPosition] = useState(0), [duration, setDuration] = useState(0);
-  const [rate, setRate] = useState(1), [intro, setIntro] = useState(0), [outro, setOutro] = useState(0), [controls, setControls] = useState(true);
-  const [dialog, setDialog] = useState(''), [source, setSource] = useState('1'), [error, setError] = useState('');
-  const seek = delta => { if (video.current && duration > 0) video.current.currentTime = Math.max(0, Math.min(duration / 1000, video.current.currentTime + delta / 1000)); };
-  const options = dialog === 'speed' ? [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map(value => ({ value: String(value), label: `${value}×` })) : dialog === 'episodes' ? [{ value: '0', label: '公共测试片段' }] : [{ value: '1', label: '演示线路 1' }, { value: '2', label: '演示线路 2' }];
-  return <View style={{ flex: 1, backgroundColor: '#000' }}>
-    <video ref={video} src={demoVideo} muted playsInline preload="metadata" onLoadedMetadata={e => setDuration(e.currentTarget.duration * 1000)} onTimeUpdate={e => setPosition(e.currentTarget.currentTime * 1000)} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)} onError={() => setError('公共测试片段加载失败，请检查网络。')} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-    {error && <Text style={{ position: 'absolute', top: '45%', alignSelf: 'center', color: '#fff' }}>{error}</Text>}
-    {controls ? <CinemaPlayer title={movie.title} episode="公共测试片段，非影片正片" source={`演示线路 ${source}`} playing={playing} position={position} duration={duration} rate={rate} hasNext={false} intro={intro} outro={outro}
-      onBack={onBack} onToggle={() => { if (video.current.paused) video.current.play().catch(() => setError('无法开始播放，请重试。')); else video.current.pause(); }} onSeek={seek} onNext={() => {}} onEpisodes={() => setDialog('episodes')} onSources={() => setDialog('source')} onSpeed={() => setDialog('speed')} onIntro={() => setIntro(position)} onOutro={() => setOutro(position)} onHide={() => setControls(false)}
-    /> : <View style={{ position: 'absolute', bottom: 35, alignSelf: 'center' }}><CinemaButton label="显示控制栏" primary onPress={() => setControls(true)} /></View>}
-    <CinemaChoiceDialog visible={!!dialog} title={{ speed: '播放速度', source: '选择播放源', episodes: '选择剧集' }[dialog] || ''} options={options} selected={dialog === 'speed' ? String(rate) : dialog === 'source' ? source : '0'} onClose={() => setDialog('')} onSelect={value => { if (dialog === 'speed') { setRate(Number(value)); video.current.playbackRate = Number(value); } else if (dialog === 'source') setSource(value); else { video.current.currentTime = 0; } setDialog(''); }} />
-  </View>;
+  const [preferences, setPreferences] = useState({ rate: 1, intro: 0, outro: 0 });
+  const item = { ...movie, source: 'demo', sourceName: '公共测试片段，非影片正片', episodes: [`公共测试片段$${demoVideo}`] };
+  const sources = [item, { ...item, source: 'demo-2', sourceName: '演示线路 2' }];
+  return <ConnectedPlayer item={item} sources={sources} onBack={onBack} onRecord={() => {}} preferences={preferences} onPreferences={setPreferences} direct />;
 }
 export default function Preview() {
   usePreviewKeyboard();
@@ -104,7 +96,7 @@ export default function Preview() {
   else if (page === 'play') content = <DemoPlayer movie={movie} onBack={back} />;
   else if (page === 'favorites') content = <CinemaLibrary {...nav} items={mode === 'empty' ? [] : movies.filter(item => favoriteIds.includes(item.id))} loading={mode === 'loading'} error={mode === 'error' ? '暂时无法读取收藏。' : null} imageUrl={url => url} onRetry={() => { location.search = ''; }} onOpen={open} />;
   else if (page === 'settings') content = <CinemaSettings {...nav} apiUrl={settings.api} m3uUrl={settings.m3u} remoteEnabled={settings.remote} remoteRunning={false} remoteError={settings.remote ? '预览模式不启动远程输入服务。' : null} loggedIn={loggedIn} dirty={dirty} saving={false} savedMessage="设置保存在本地预览中" onApiChange={api => { setSettings({ ...settings, api }); setDirty(true); }} onM3uChange={m3u => { setSettings({ ...settings, m3u }); setDirty(true); }} onRemoteChange={remote => { setSettings({ ...settings, remote }); setDirty(true); }} onSave={() => { saveDemo('settings', settings); setDirty(false); setNotice('已保存本地预览设置，未连接服务器。'); }} onAccount={() => { if (loggedIn) { setLoggedIn(false); setPassword(''); } else { setLoginError(''); setModal('login'); } }} updateSection={<View style={{ paddingVertical: 25, gap: 15 }}><Text style={{ color: '#f5f6f7', fontSize: 21, fontWeight: '600' }}>应用更新</Text><Text style={{ color: '#b8bec2' }}>版本信息与更新弹窗预览</Text><View style={{ alignSelf: 'flex-start' }}><CinemaButton label="查看更新弹窗" onPress={() => setModal('update')} /></View></View>} />;
-  else if (page === 'live') content = <CinemaLive {...nav} channels={mode === 'empty' ? [] : demoChannels} selectedId={channel} group={liveGroup} onGroup={setLiveGroup} onSelect={value => setChannel(value.id)} loading={mode === 'loading'} configured={mode !== 'config'} onRetry={() => { location.search = ''; }} fullscreen={fullscreen} onFullscreen={setFullscreen} player={<View style={{ flex: 1, backgroundColor: '#000' }}><video key={channel} src={demoVideo} muted controls playsInline loop style={{ width: '100%', height: '100%', objectFit: 'contain' }} /><Text style={{ position: 'absolute', top: 14, left: 16, color: '#fff', padding: 8, backgroundColor: '#101214cc', borderRadius: 8 }}>示例频道 · 公共测试片段</Text></View>} />;
+  else if (page === 'live') content = <CinemaLive {...nav} channels={mode === 'empty' ? [] : demoChannels} selectedId={channel} group={liveGroup} onGroup={setLiveGroup} onSelect={value => setChannel(value.id)} loading={mode === 'loading'} configured={mode !== 'config'} onRetry={() => { location.search = ''; }} fullscreen={fullscreen} onFullscreen={setFullscreen} player={<View style={{ flex: 1, backgroundColor: '#000' }}><BrowserVideo key={channel} url={demoVideo} direct /><Text style={{ position: 'absolute', top: 14, left: 16, color: '#fff', padding: 8, backgroundColor: '#101214cc', borderRadius: 8 }}>示例频道 · 公共测试片段</Text></View>} />;
   else {
     let items = category.type === 'record' ? records : category.type === 'movie' ? movies : [];
     if (['经典', '科幻', '动画'].includes(category.tag)) items = items.filter(item => item.tag === category.tag);

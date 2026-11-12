@@ -22,7 +22,7 @@ test('bridge isolates cookies, forwards API methods, rewrites media and rejects 
     if(req.url==='/api/logout'){res.setHeader('Set-Cookie','upstream_auth=; Path=/; Max-Age=0');return res.end('{"ok":true}');}
     if(req.url.startsWith('/api/favorites')){res.statusCode=req.headers.cookie?.includes('upstream_auth=fixture-session')?200:401;return res.end('{}');}
     if(req.url==='/playlist.m3u8'){res.setHeader('Content-Type','application/vnd.apple.mpegurl');return res.end('#EXTM3U\n#EXTINF:5,\nclip.ts');}
-    if(req.url==='/clip.ts'){res.statusCode=req.headers.range?206:200;res.setHeader('Content-Type','video/mp2t');res.setHeader('Content-Range','bytes 0-3/4');return res.end('test');}
+    if(req.url==='/clip.ts'){res.statusCode=req.headers.range?206:200;res.setHeader('Content-Type','video/mp2t');res.setHeader('Content-Range','bytes 0-3/4');res.setHeader('Content-Length','4');return res.end('test');}
     res.statusCode=404;res.end();
   });
   const bridge=await listen(createBridge());
@@ -36,7 +36,7 @@ test('bridge isolates cookies, forwards API methods, rewrites media and rejects 
     assert.equal((await call('/api/favorites')).status,200);assert.equal((await (await call('/session')).json()).authenticated,true);
     const playlist=await call('/media?url='+encodeURIComponent(upstream.url+'/playlist.m3u8'));assert((await playlist.text()).includes('/__dusk/media?url='));
     const raw=await call('/media?raw=1&url='+encodeURIComponent(upstream.url+'/playlist.m3u8'));assert((await raw.text()).includes('\nclip.ts'));
-    const range=await call('/media?url='+encodeURIComponent(upstream.url+'/clip.ts'),{headers:{Range:'bytes=0-3'}});assert.equal(range.status,206);assert.equal(await range.text(),'test');
+    const range=await call('/media?url='+encodeURIComponent(upstream.url+'/clip.ts'),{headers:{Range:'bytes=0-3'}});assert.equal(range.status,206);assert.equal(range.headers.get('content-length'),'4');assert.equal(await range.text(),'test');
     assert.equal(seen.find(value=>value.path==='/clip.ts').cookie,undefined);assert.equal(seen.find(value=>value.path==='/clip.ts').range,'bytes=0-3');
     assert.equal((await call('/api/favorites',{headers:{Origin:'https://foreign.example'}})).status,403);
     assert.equal((await call('/api/login',{method:'POST',body:{},headers:{'X-Dusk-Client':''}})).status,403);

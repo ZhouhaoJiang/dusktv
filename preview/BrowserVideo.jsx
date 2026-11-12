@@ -1,36 +1,58 @@
 /* eslint-env browser */
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import Hls from 'hls.js';
+import { I18nProvider } from '@videojs/react/i18n';
+import '@videojs/react/i18n/locales/zh-CN/register';
+import { VideoPlayer, NeutralVideoSkin, Video } from '@videojs/react/video';
+import { HlsJsVideo } from '@videojs/react/media/hlsjs-video';
+import '@videojs/react/video/neutral-skin.css';
+import './player.css';
 import { mediaUrl } from './client-api';
 
-export default forwardRef(function BrowserVideo({ url, start = 0, rate = 1, onStatus = () => {}, onError = () => {}, controls = false, onEnded, autoPlay = false }, ref) {
-  const element = useRef(null), status = useRef(onStatus), reportError = useRef(onError), initial = useRef(start);
-  status.current = onStatus; reportError.current = onError;
+export default forwardRef(function BrowserVideo({ url, loadKey = '', title = '', start = 0, rate = 1, onStatus, onError, onRateChange, onEnded, autoPlay = false, direct = false, children }, ref) {
+  const element = useRef(null);
   const [retry, setRetry] = useState(0);
-  useImperativeHandle(ref, () => ({
-    toggle: async () => { const v=element.current; if(v.paused) await v.play(); else v.pause(); },
-    seek: delta => { const v=element.current; if(Number.isFinite(v.duration)) v.currentTime=Math.max(0,Math.min(v.duration,v.currentTime+delta/1000)); },
-    retry: () => setRetry(value=>value+1),
-    snapshot: () => ({ position: element.current.currentTime*1000, duration: element.current.duration*1000 }),
-  }), []);
-  useEffect(() => { element.current.playbackRate = rate; }, [rate]);
+  const [fullscreenError, setFullscreenError] = useState(false);
   useEffect(() => {
+    const failed = event => { if (event.target.contains?.(element.current)) setFullscreenError(true); };
+    const changed = () => setFullscreenError(false);
+    document.addEventListener('fullscreenerror', failed, true);
+    document.addEventListener('fullscreenchange', changed);
+    return () => { document.removeEventListener('fullscreenerror', failed, true); document.removeEventListener('fullscreenchange', changed); };
+  }, []);
+  const initial = useRef(start);
+  const callbacks = useRef({ onStatus, onError, onRateChange, onEnded });
+  callbacks.current = { onStatus, onError, onRateChange, onEnded };
+  useImperativeHandle(ref, () => ({
+    retry: () => { initial.current = element.current?.currentTime * 1000 || start; setRetry(value => value + 1); },
+    restart: position => { initial.current = position; setRetry(value => value + 1); },
+    snapshot: () => ({ position: (element.current?.currentTime || 0) * 1000, duration: (element.current?.duration || 0) * 1000 }),
+  }), [start]);
+  useEffect(() => { initial.current = start; }, [url, start, loadKey]);
+  useEffect(() => { if (element.current) element.current.playbackRate = rate; }, [rate, url, retry, loadKey]);
+  const report = () => {
     const video = element.current;
-    if (!url) return;
-    initial.current = start;
-    let hls, disposed = false;
-    const report = () => status.current({ position: video.currentTime*1000, duration: Number.isFinite(video.duration)?video.duration*1000:0, playing: !video.paused && !video.ended });
-    const loaded = () => { if(initial.current>0 && Number.isFinite(video.duration)) video.currentTime=Math.min(initial.current/1000,Math.max(0,video.duration-1)); initial.current=0; if(autoPlay) video.play().catch(()=>{}); report(); };
-    const failed = () => { if(!disposed) reportError.current('无法播放此地址，请重试或切换片源。'); };
-    for(const event of ['play','pause','timeupdate','durationchange']) video.addEventListener(event,report);
-    video.addEventListener('loadedmetadata',loaded); video.addEventListener('error',failed);
-    const source = mediaUrl(url);
-    if (/\.m3u8(?:[?#]|$)/i.test(url) && Hls.isSupported()) {
-      hls = new Hls({ maxBufferLength: 30 });
-      hls.on(Hls.Events.ERROR, (_, data) => { if(data.fatal) failed(); });
-      hls.loadSource(source); hls.attachMedia(video);
-    } else { video.src=source; video.load(); }
-    return () => { disposed=true; for(const event of ['play','pause','timeupdate','durationchange']) video.removeEventListener(event,report); video.removeEventListener('loadedmetadata',loaded); video.removeEventListener('error',failed); hls?.destroy(); video.pause(); video.removeAttribute('src'); video.load(); };
-  }, [url, retry, start, autoPlay]);
-  return <video ref={element} playsInline controls={controls} onEnded={onEnded} preload="metadata" style={{ width:'100%', height:'100%', objectFit:'contain', background:'#000' }} />;
+    if (video) callbacks.current.onStatus?.({ position: video.currentTime * 1000, duration: Number.isFinite(video.duration) ? video.duration * 1000 : 0, playing: !video.paused && !video.ended });
+  };
+  const Media = /\.m3u8(?:[?#]|$)/i.test(url || '') ? HlsJsVideo : Video;
+  return <I18nProvider locale="zh-CN">
+    <VideoPlayer title={title}>
+      <NeutralVideoSkin className="dusk-player">
+        <Media key={`${loadKey}:${url}:${retry}`} ref={element} src={url ? (direct ? url : mediaUrl(url)) : undefined} playsInline preload="metadata" autoPlay={autoPlay}
+          onLoadedMetadata={() => {
+            const video = element.current;
+            video.playbackRate = rate;
+            if (initial.current > 0 && Number.isFinite(video.duration)) video.currentTime = Math.min(initial.current / 1000, Math.max(0, video.duration - 0.1));
+            initial.current = 0;
+            report();
+          }}
+          onTimeUpdate={report} onDurationChange={report} onPlay={report} onPause={report}
+          onRateChange={() => callbacks.current.onRateChange?.(element.current.playbackRate)}
+          onEnded={() => { report(); callbacks.current.onEnded?.(); }}
+          onError={() => callbacks.current.onError?.('无法播放此地址，请重试或切换片源。')}
+        />
+        {children}
+        {fullscreenError && <div className="dusk-player-recovery" role="status"><span>浏览器拒绝了全屏请求。请检查站点的全屏权限，或在普通浏览器窗口中打开。</span><button onClick={() => setFullscreenError(false)}>知道了</button></div>}
+      </NeutralVideoSkin>
+    </VideoPlayer>
+  </I18nProvider>;
 });

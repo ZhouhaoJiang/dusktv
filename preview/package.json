@@ -11,7 +11,8 @@
     "preview": "vite preview --host 127.0.0.1 --port 4318 --strictPort"
   },
   "dependencies": {
-    "hls.js": "^1.7.4",
+    "@videojs/hlsjs-video": "10.3.0",
+    "@videojs/react": "10.3.0",
     "lucide-react": "0.523.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",

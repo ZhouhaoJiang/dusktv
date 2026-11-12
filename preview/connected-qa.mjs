@@ -7,15 +7,22 @@ import { join } from 'node:path';
 import assert from 'node:assert/strict';
 
 const mediaPath=join(tmpdir(),'dusktv-browser-qa.mp4');
-execFileSync('ffmpeg',['-hide_banner','-loglevel','error','-y','-f','lavfi','-i','color=c=black:s=320x180:d=8','-c:v','libx264','-pix_fmt','yuv420p','-movflags','+faststart',mediaPath]);
+execFileSync('ffmpeg',['-hide_banner','-loglevel','error','-y','-f','lavfi','-i','testsrc2=s=320x180:d=60','-c:v','libx264','-preset','ultrafast','-pix_fmt','yuv420p','-movflags','+faststart',mediaPath]);
+execFileSync('ffmpeg',['-hide_banner','-loglevel','error','-y','-i',mediaPath,'-c','copy','-hls_time','4','-hls_list_size','0','-hls_segment_filename',join(tmpdir(),'dusktv-qa-%03d.ts'),join(tmpdir(),'dusktv-qa.m3u8')]);
 const clip=await readFile(mediaPath), checks=[], mutations=[], requests=[];
 let favorites={},records={},history=[],expired=false,serverURL='';
-const item=()=>({id:1,title:'集成测试影片',source:'fixture',source_name:'本地测试源',poster:'https://fixture.invalid/poster.jpg',year:'2026',episodes:[`第 1 集$${serverURL}/clip.mp4`,`第 2 集$${serverURL}/clip.mp4`],desc:'仅用于验证真实接口适配，不是用户影片。'});
+const item=()=>({id:1,title:'集成测试影片',source:'fixture',source_name:'本地测试源',poster:'https://fixture.invalid/poster.jpg',year:'2026',episodes:[`第 1 集$${serverURL}/clip.mp4`,`第 2 集$${serverURL}/dusktv-qa.m3u8`],desc:'仅用于验证真实接口适配，不是用户影片。'});
 const fixture=createServer(async(req,res)=>{
   const url=new URL(req.url,'http://fixture');requests.push({path:url.pathname,method:req.method});
   const json=(value,status=200)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(value));};
   if(url.pathname==='/api/server-config')return json({SiteName:'集成测试服务',StorageType:'kvrocks'});
-  if(url.pathname==='/clip.mp4'){res.writeHead(200,{'Content-Type':'video/mp4','Content-Length':clip.length,'Accept-Ranges':'bytes'});return res.end(clip);}
+  if(url.pathname==='/clip.mp4'){
+    const range=req.headers.range?.match(/^bytes=(\d+)-(\d*)$/);
+    const first=range?Number(range[1]):0, last=range&&range[2]?Math.min(Number(range[2]),clip.length-1):clip.length-1;
+    const data=clip.subarray(first,last+1);
+    res.writeHead(range?206:200,{'Content-Type':'video/mp4','Content-Length':data.length,'Accept-Ranges':'bytes',...(range?{'Content-Range':`bytes ${first}-${last}/${clip.length}`}:{})});return res.end(data);
+  }
+  if(/^\/dusktv-qa(?:-\d{3}\.ts|\.m3u8)$/.test(url.pathname)){const file=await readFile(join(tmpdir(),url.pathname.slice(1)));res.writeHead(200,{'Content-Type':url.pathname.endsWith('.ts')?'video/mp2t':'application/vnd.apple.mpegurl'});return res.end(file);}
   if(url.pathname==='/channels.m3u'){res.setHeader('Content-Type','application/vnd.apple.mpegurl');return res.end(`#EXTM3U\n#EXTINF:-1 group-title="测试",测试频道\n${serverURL}/clip.mp4`);}
   let body={};if(req.method==='POST'){const chunks=[];for await(const chunk of req)chunks.push(chunk);body=JSON.parse(Buffer.concat(chunks).toString()||'{}');}
   if(url.pathname==='/api/login'){
@@ -63,15 +70,55 @@ try{
   check('Actual search API, stale response protection, API errors, no results and favorite writes');
   await button('收藏').click();await button('集成测试影片').click();await button('开始播放').click();
   await page.waitForFunction(()=>document.querySelector('video')?.readyState>=1);await button('播放').click();await expect(button('暂停')).toBeVisible();await page.waitForTimeout(400);await button('暂停').click();
-  await button('1× 倍速').click();await button('1.5×').click();assert.equal(await page.locator('video').evaluate(v=>v.playbackRate),1.5);
+  const slider = page.getByRole('slider', { name: '定位', exact: true });
+  const bounds = await slider.locator('..').boundingBox();
+  await page.mouse.move(bounds.x + 4, bounds.y + bounds.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + bounds.width * 0.55, bounds.y + bounds.height / 2, { steps: 12 });
+  await page.mouse.up();
+  await expect.poll(() => page.locator('video').evaluate(v => v.currentTime)).toBeGreaterThan(28);
+  await expect.poll(() => page.locator('video').evaluate(v => v.currentTime)).toBeLessThan(38);
+  await slider.focus(); await page.keyboard.press('ArrowLeft');
+  await expect.poll(() => page.locator('video').evaluate(v => v.currentTime)).toBeLessThan(33);
+  await button('静音').click(); assert.equal(await page.locator('video').evaluate(v => v.muted), true);
+  await button('取消静音').click(); assert.equal(await page.locator('video').evaluate(v => v.muted), false);
+  await button('设置').click(); await page.getByRole('menuitem', { name: /速度/ }).click();
+  await page.getByRole('menuitemradio', { name: '1.5×', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await expect.poll(() => page.locator('video').evaluate(v => v.playbackRate)).toBe(1.5);
+  check('Video.js real pointer timeline drag, keyboard seeking, mute and playback-rate controls');
+  await button('选集').click(); await expect(page.getByRole('dialog', { name: '选择剧集' })).toBeVisible(); await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await button('全屏').click();
+  await expect.poll(() => page.evaluate(() => !!document.fullscreenElement || document.body.textContent.includes('浏览器拒绝了全屏请求'))).toBe(true);
+  if (await page.evaluate(() => !!document.fullscreenElement)) {
+    await button('选集').click(); await expect(page.getByRole('dialog', { name: '选择剧集' })).toBeVisible(); await page.keyboard.press('Escape');
+    await button('退出全屏').click(); await page.waitForFunction(() => !document.fullscreenElement);
+    check('Real browser fullscreen enter, dialog visibility and exit');
+  } else {
+    console.log('LIMITATION Local Chrome rejects fullscreen; rejection feedback verified, native fullscreen not verified');
+    await button('知道了').click();
+  }
+  await expect(button('画中画')).toBeVisible();
+  await page.screenshot({path:'qa-artifacts/videojs-player.png'});
+
   await button('下一集').click();await expect(page.getByText('第 2 集 / 本地测试源',{exact:true})).toBeVisible();await page.waitForFunction(()=>document.querySelector('video')?.readyState>=1);
-  await button('播放').click();await page.waitForTimeout(300);await button('暂停').click();await button('返回影片').click();await page.waitForTimeout(500);
+  await page.waitForFunction(()=>document.querySelector('video')?.currentSrc.startsWith('blob:'));
+  await button('选集').click(); await button('第 1 集').click();
+  await page.waitForFunction(()=>document.querySelector('video')?.readyState>=2 && !document.querySelector('video').currentSrc.startsWith('blob:'));
+  await expect.poll(()=>page.locator('video').evaluate(v=>v.currentTime)).toBeLessThan(1);
+  // Put the clip just before its end, then verify the real ended event advances playback.
+  await page.locator('video').evaluate(v=>{v.currentTime=v.duration-0.3;});
+  await button('播放').click();
+  await expect(page.getByText('第 2 集 / 本地测试源',{exact:true})).toBeVisible();
+  await page.waitForFunction(()=>document.querySelector('video')?.currentSrc.startsWith('blob:') && !document.querySelector('video').paused);
+  await button('暂停').click();await button('返回影片').click();await page.waitForTimeout(500);
   assert(mutations.includes('record:save'));assert(records['fixture+1']);
-  check('Actual media proxy playback, speed, episodes and watch-history synchronization');
+  check('Actual MP4 and HLS segment playback, speed, episode restart, automatic next episode and watch-history synchronization');
   await button('已收藏').click();await expect(button('加入收藏')).toBeVisible();assert.equal(favorites['fixture+1'],undefined);
   await button('设置').click();await page.getByRole('textbox',{name:'直播源地址'}).fill(serverURL+'/channels.m3u');await button('保存设置').click();await expect(page.getByText('已连接 集成测试服务',{exact:true})).toBeVisible();await button('直播').click();await expect(button('测试频道')).toBeVisible();await page.waitForFunction(()=>document.querySelector('video')?.readyState>=1);
   await button('全屏观看').click();await button('退出全屏').click();
-  check('M3U loading, real channel video and fullscreen switching');
+  check('M3U loading, real channel video and expanded page layout');
   expired=true;await button('搜索').click();await page.getByRole('textbox',{name:'搜索片名'}).fill('过期');await page.getByRole('textbox',{name:'搜索片名'}).press('Enter');await expect(page.getByRole('textbox',{name:'用户名'})).toBeVisible();
   await page.getByRole('textbox',{name:'用户名'}).fill('fixture');await page.getByLabel('密码',{exact:true}).fill('test-only-password');await button('登录').click();await expect(page.getByRole('dialog')).toHaveCount(0);
   await button('设置').click();await button('退出登录').click();await button('确认').click();await expect(page.getByRole('textbox',{name:'用户名'})).toBeVisible();
@@ -80,4 +127,4 @@ try{
   await mkdir(new URL('./qa-artifacts/',import.meta.url),{recursive:true});
   await writeFile(new URL('./qa-artifacts/connected-results.json',import.meta.url),JSON.stringify({checks,mutations,pageErrors:errors,backend:'isolated local fixture; no user account used'},null,2));
   console.log('Completed',checks.length,'connected check groups.');
-}finally{await browser.close();fixture.closeAllConnections();await new Promise(resolve=>fixture.close(resolve));}
+}catch(error){await page.screenshot({path:'qa-artifacts/player-failure.png'});console.log((await page.locator('body').innerText()).slice(-2000));throw error;}finally{await browser.close();fixture.closeAllConnections();await new Promise(resolve=>fixture.close(resolve));}

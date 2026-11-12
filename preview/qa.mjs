@@ -38,22 +38,27 @@ try {
   await page.waitForFunction(() => document.querySelector('video')?.readyState >= 1, { timeout: 15000 });
   await button('播放').click(); await expect(button('暂停')).toBeVisible();
   await button('暂停').click(); await expect(button('播放')).toBeVisible();
-  await button('1× 倍速').click(); await button('1.5×').click();
+  await button('设置').click(); await page.getByRole('menuitem', { name: /速度/ }).click();
+  await page.getByRole('menuitemradio', { name: '1.5×', exact: true }).click(); await page.keyboard.press('Escape');
   assert.equal(await page.locator('video').evaluate(v => v.playbackRate), 1.5);
-  await button('快进 20 秒').click(); assert((await page.locator('video').evaluate(v => v.currentTime)) > 0);
-  await button('快退 20 秒').click(); assert.equal(await page.locator('video').evaluate(v => v.currentTime), 0);
-  await expect(button('下一集')).toHaveAttribute('aria-disabled', 'true');
-  await button('换源').click(); await button('演示线路 2').click(); await expect(page.getByText(/公共测试片段，非影片正片 \/ 演示线路 2/)).toBeVisible();
+  const slider = page.getByRole('slider', { name: '定位', exact: true });
+  await slider.focus(); await page.keyboard.press('End');
+  await expect.poll(() => page.locator('video').evaluate(v => v.currentTime)).toBeGreaterThan(0);
+  await slider.focus(); await page.keyboard.press('Home');
+  await expect.poll(() => page.locator('video').evaluate(v => v.currentTime)).toBe(0);
+  await expect(button('下一集')).toBeDisabled();
+  await button('换源').click(); await button('演示线路 2').click(); await expect(page.getByText('公共测试片段 / 演示线路 2', { exact: true })).toBeVisible();
   await button('选集').click(); await button('公共测试片段').click();
-  await button('隐藏控制栏').click(); await button('显示控制栏').click();
-  check('Public test video loads; playback, seek bounds, speed, source, episodes, disabled next and controls visibility');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(button('全屏')).toBeVisible();
+  check('Video.js demo playback, keyboard timeline seeking, speed, source, episodes and fullscreen entry');
 
   await goto('live');
   assert((await button('纪实').boundingBox()).height < 70, 'Live group tabs must not stretch to fill the channel column');
   await button('旅行风景').click(); await expect(button('旅行风景')).toHaveAttribute('aria-selected', 'true');
   await button('影视').click(); await button('电影频道').click();
   await button('全屏观看').click(); await button('退出全屏').click(); await expect(button('影视')).toBeVisible();
-  check('Live grouping, channel selection and fullscreen exit');
+  check('Live grouping, channel selection and expanded page exit');
 
   await goto('settings');
   const api = page.getByRole('textbox', { name: '服务器地址' });
@@ -79,14 +84,14 @@ try {
     await page.setViewportSize(viewport);
     for (const route of ['home', 'search', 'detail/dune', 'favorites', 'live', 'settings', 'play/dune']) {
       await goto(route);
-      const overflow = await page.evaluate(() => [...document.querySelectorAll('[role="button"],input')].filter(el => {
+      const overflow = await page.evaluate(() => [...document.querySelectorAll('button,[role="button"],input')].filter(el => {
         const r = el.getBoundingClientRect(); if (!r.width || (r.left >= -1 && r.right <= innerWidth + 1)) return false;
         for(let parent = el.parentElement; parent; parent = parent.parentElement) { if (['auto','scroll'].includes(getComputedStyle(parent).overflowX)) return false; }
         return true;
       }).map(el => el.getAttribute('aria-label') || el.textContent));
       assert.deepEqual(overflow, [], `${viewport.width} ${route}: horizontal clipping`);
       if (route.startsWith('play')) {
-        const clipped = await page.evaluate(() => [...document.querySelectorAll('[role="button"]')].filter(el => { const r = el.getBoundingClientRect(); return r.top < -1 || r.bottom > innerHeight - 25; }).map(el => el.getAttribute('aria-label')));
+        const clipped = await page.evaluate(() => [...document.querySelectorAll('button,[role="button"]')].filter(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && !el.closest('[hidden]') && (r.top < -1 || r.bottom > document.getElementById('root').getBoundingClientRect().bottom + 1); }).map(el => el.getAttribute('aria-label')));
         assert.deepEqual(clipped, [], `${viewport.width} player controls clipped`);
       }
       if ([1440,390].includes(viewport.width)) await page.screenshot({ path: new URL(`./qa-artifacts/${viewport.width}-${route.replace('/','-')}.png`, import.meta.url).pathname });

@@ -83,6 +83,7 @@ export function createBridge({ defaultServer = '', fetchImpl = fetch } = {}) {
         }
         const headers = { 'Content-Type': type, 'Cache-Control': 'no-store' };
         for (const key of ['content-range', 'accept-ranges']) if (upstream.headers.has(key)) headers[key] = upstream.headers.get(key);
+        if (!upstream.headers.get('content-encoding') && upstream.headers.has('content-length')) headers['content-length'] = upstream.headers.get('content-length');
         res.writeHead(upstream.status, headers);
         const stream = Readable.fromWeb(upstream.body); res.on('close', () => stream.destroy()); stream.on('error', () => res.destroy()); stream.pipe(res); return;
       }
