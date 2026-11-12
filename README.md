@@ -1,8 +1,30 @@
 # 暮映 · DuskTV
 
+**简体中文** | [English](README.en.md)
+
 连接 MoonTV / LunaTV 的电视与浏览器播放器。基于 [orion-lib/OrionTV](https://github.com/orion-lib/OrionTV) fork 开发，保留上游历史与来源说明。
 
 DuskTV 使用统一的深色影院界面：首页、搜索、影片详情、收藏、直播、设置和播放控制按照窗口宽度与高度调整比例。原生端支持 Android TV / Apple TV；本地浏览器客户端支持真实登录、搜索、收藏和观看记录同步，以及 MP4 / HLS 播放。浏览器播放器采用 Video.js 10 React 的完整控制栏，提供可拖动进度、音量、倍速、全屏、画中画与键盘操作；选集、换源及片头片尾设置保留暮映业务适配。
+
+## 界面预览
+
+以下截图使用独立演示数据，在 1920 × 1080 浏览器窗口中渲染与电视端共享的界面组件，**不是 Android TV / Apple TV 真机截图**。原生播放控件与浏览器播放器不同；电视真机截图将在完成设备验证后补充。README 提供中英双语，应用界面目前以中文为主。
+
+### 首页
+
+全页海报背景、分类导航与影片列表。
+
+![暮映首页：模糊海报背景、分类导航与影片列表](docs/screenshots/home.png)
+
+### 搜索与影片详情
+
+| 搜索 | 影片详情 |
+| --- | --- |
+| ![搜索页：片名输入、搜索记录与手机输入入口](docs/screenshots/search.png) | ![影片详情：海报、简介、片源与播放入口](docs/screenshots/detail.png) |
+
+### 设置
+
+![设置页：影视服务器、直播源与手机遥控输入配置](docs/screenshots/settings.png)
 
 ## 本地浏览器客户端
 
@@ -23,7 +45,7 @@ DUSK_SERVER_URL=https://your-server.example
 - 正常入口使用真实服务器数据；`?demo=1#home` 是独立的界面演示。
 - 本地接口桥接仅监听回环地址，处理服务器会话与媒体跨域。密码不写入项目或浏览器存储；上游 Cookie 仅保留在本地服务的内存中，重启服务后需重新登录。
 - `npm run build` 生成浏览器产物，`npm run preview` 启动带接口桥接的本地预览。仅复制 `dist/` 到静态主机不能提供真实登录和媒体桥接。
-- 不要提交自己的 `.env.local`、服务器地址、登录信息或运行截图。
+- 不要提交自己的 `.env.local`、私人服务器地址、登录信息或含个人数据的运行截图。文档截图仅使用独立演示数据。
 
 ## 原生电视端
 
@@ -60,6 +82,10 @@ npm run qa:connected
 ```
 
 浏览器 QA 需要本机 Chrome；连接模式 QA 还需要 FFmpeg，使用隔离的本地测试服务，不使用真实账户。可设置 `PREVIEW_URL` 指向其他本地端口。JavaScript/Hermes 导出不等同于 APK/IPA 构建或电视真机验证。
+
+## 贡献
+
+默认分支 `main` 受保护。请从功能分支提交 PR，合并前解决讨论；禁止强推和删除默认分支。文档改动请同步更新中英文 README，两份文档共用 `docs/screenshots/` 中的截图。
 
 ## 上游与许可
 
