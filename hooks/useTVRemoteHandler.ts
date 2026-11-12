@@ -80,7 +80,17 @@ export const useTVRemoteHandler = () => {
         }
       }
 
+      // Short presses are delivered on key-up by react-native-tvos. Ignore
+      // optional key-down events to avoid acting twice, but keep long-press phases.
+      const isLongPress = event.eventType === "longRight" || event.eventType === "longLeft";
+      if (!isLongPress && event.eventKeyAction === 0) return;
+
       resetTimer();
+
+      if (event.eventType === "playPause") {
+        togglePlayPause();
+        return;
+      }
 
       if (showControls) {
         // 如果控制条已显示，则不处理后台的快进/快退等操作
@@ -94,7 +104,7 @@ export const useTVRemoteHandler = () => {
           setShowControls(true);
           break;
         case "left":
-          seek(-SEEK_STEP); // 快退15秒
+          seek(-SEEK_STEP); // 快退20秒
           break;
         case "longLeft":
           if (!fastForwardIntervalRef.current && event.eventKeyAction === 0) {

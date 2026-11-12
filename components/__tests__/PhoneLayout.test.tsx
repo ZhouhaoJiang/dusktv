@@ -4,9 +4,10 @@ import PlayScreen from '@/app/play';
 import { PlayerControls, TouchPlayerControls, TouchPlayerPanel } from '@/components/PlayerControls';
 import { CinemaTouchControls, CinemaTouchGestures, CinemaTouchPanel, createTouchGestures } from '@/components/cinema/CinemaPlayer';
 import * as ScreenOrientation from 'expo-screen-orientation';
-import { ActivityIndicator, FlatList, Keyboard, Platform, StyleSheet, Text } from 'react-native';
+import { ActivityIndicator, FlatList, Keyboard, Platform, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { ThemedView } from '@/components/ThemedView';
 import CinemaHome from '@/components/home/CinemaHome';
-import { CinemaShell, CinemaTabBar } from '@/components/cinema/CinemaUI';
+import { CinemaButton, CinemaShell, CinemaTabBar } from '@/components/cinema/CinemaUI';
 
 // Layout and player state are driven by hand so each test can rotate the phone or show the controls.
 const layout = { deviceType: 'mobile', isPortrait: true };
@@ -57,12 +58,31 @@ describe('play screen on touch devices', () => {
     videoMounts = 0;
     Object.assign(layout, { deviceType: 'mobile', isPortrait: true });
     Object.assign(player, {
-      isLoading: false, showControls: false, initialPosition: 0, playbackRate: 1, episode: { url: 'https://example.test/1.m3u8', title: '第 1 集' },
+      isLoading: false, showControls: false, showEpisodeModal: false, showSourceModal: false, showSpeedModal: false, initialPosition: 0, playbackRate: 1, episode: { url: 'https://example.test/1.m3u8', title: '第 1 集' },
       setVideoRef: jest.fn(), handlePlaybackStatusUpdate: jest.fn(), setShowControls: jest.fn(), togglePlayPause: jest.fn(), reset: jest.fn(), loadVideo: jest.fn(),
     });
     await act(async () => { tree = create(<PlayScreen />); });
   });
   afterEach(() => act(() => tree.unmount()));
+
+  test('TV video does not consume OK and releases stage focus to visible controls', () => {
+    const wasTV = Platform.isTV;
+    Object.defineProperty(Platform, 'isTV', { configurable: true, value: true });
+    try {
+      set({ deviceType: 'tv', isPortrait: false });
+      const surface = tree.root.findByType(TouchableOpacity);
+      expect(surface.props.disabled).toBe(true);
+      expect(surface.props.accessible).toBe(false);
+      expect(surface.props.onPress).toBeUndefined();
+      expect(tree.root.findAllByType(ThemedView).some(view => view.props.hasTVPreferredFocus)).toBe(true);
+      set({ showControls: true });
+      expect(tree.root.findAllByType(ThemedView).some(view => view.props.focusable)).toBe(false);
+      expect(tree.root.findAllByType(ThemedView).some(view => view.props.accessible)).toBe(false);
+      player.showEpisodeModal = true;
+      set({ showControls: false });
+      expect(tree.root.findAllByType(ThemedView).some(view => view.props.hasTVPreferredFocus)).toBe(false);
+    } finally { player.showEpisodeModal = false; Object.defineProperty(Platform, 'isTV', { configurable: true, value: wasTV }); }
+  });
 
   test('portrait phone shows the episode panel under the video', () => {
     expect(count(TouchPlayerPanel)).toBe(1);
@@ -232,7 +252,7 @@ describe('gestures on the play screen', () => {
     jest.clearAllMocks();
     Object.assign(layout, { deviceType: 'mobile', isPortrait: true });
     Object.assign(player, {
-      isLoading: false, showControls: false, initialPosition: 0, playbackRate: 1, episode: { url: 'https://example.test/1.m3u8', title: '第 1 集' },
+      isLoading: false, showControls: false, showEpisodeModal: false, showSourceModal: false, showSpeedModal: false, initialPosition: 0, playbackRate: 1, episode: { url: 'https://example.test/1.m3u8', title: '第 1 集' },
       setVideoRef: jest.fn(), handlePlaybackStatusUpdate: jest.fn(), setShowControls: jest.fn(), togglePlayPause: jest.fn(), reset: jest.fn(), loadVideo: jest.fn(),
     });
     await act(async () => { tree = create(<PlayScreen />); });
@@ -479,4 +499,21 @@ describe('phone home', () => {
       expect(list.props.numColumns ?? 1).toBe(1);
     }
   });
+});
+
+test('low-resolution TV keeps the focus-aware header instead of phone tabs', () => {
+  const wasTV = Platform.isTV;
+  Object.defineProperty(Platform, 'isTV', { configurable: true, value: true });
+  Object.assign(windowSize, { width: 640, height: 360 });
+  let tree: ReactTestRenderer;
+  try {
+    act(() => { tree = create(<CinemaShell active="home" onNavigate={() => {}}><Text>TV</Text></CinemaShell>); });
+    expect(tree!.root.findAllByType(CinemaTabBar)).toHaveLength(0);
+    const preferred = tree!.root.findAllByType(CinemaButton).filter(button => button.props.preferred);
+    expect(preferred.map(button => button.props.label)).toEqual(['首页']);
+  } finally {
+    act(() => tree!.unmount());
+    Object.defineProperty(Platform, 'isTV', { configurable: true, value: wasTV });
+    Object.assign(windowSize, { width: 390, height: 844 });
+  }
 });
