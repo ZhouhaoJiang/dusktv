@@ -7,12 +7,18 @@ module.exports = function withAndroidRelease(config) {
     application.$['android:usesCleartextTraffic'] = 'true';
     return config;
   });
-  if (process.env.DUSK_RELEASE_BUILD !== '1') return config;
+  const signRelease = process.env.DUSK_RELEASE_BUILD === '1';
   for (const name of ['ANDROID_KEYSTORE_PATH', 'ANDROID_KEYSTORE_PASSWORD', 'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD']) {
-    if (!process.env[name]) throw new Error(`Missing release signing environment variable: ${name}`);
+    if (signRelease && !process.env[name]) throw new Error(`Missing release signing environment variable: ${name}`);
   }
   return withAppBuildGradle(config, config => {
-    const source = config.modResults.contents;
+    // RN 0.74 only filters prebuilt JNI libraries automatically with the new architecture.
+    // Match packaged ABIs to the architectures actually compiled for the old architecture too.
+    const source = config.modResults.contents.replace('defaultConfig {', `defaultConfig {
+        ndk {
+            abiFilters.addAll((project.findProperty('reactNativeArchitectures') ?: 'armeabi-v7a,arm64-v8a').split(',').toList())
+        }`);
+    if (!signRelease) { config.modResults.contents = source; return config; }
     const marker = 'signingConfigs {';
     const releaseBlock = /(release\s*\{[\s\S]*?)signingConfig signingConfigs\.debug/;
     if (!source.includes(marker) || !releaseBlock.test(source)) throw new Error('Unsupported Gradle signing template');
