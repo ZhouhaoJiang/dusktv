@@ -1,5 +1,5 @@
 import React, { forwardRef, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, Keyboard, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, FlatList, Image, Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import type { TextInputProps } from 'react-native';
 import { ArrowLeft, Home, Heart, Sunset, Search, Settings, Star, Tv, X } from 'lucide-react-native';
 import { cinema as c } from '@/constants/CinemaTheme';
@@ -126,7 +126,7 @@ export function useCinemaLayout() {
   // A phone held sideways is wide but only about 400 tall. It keeps phone-sized type and
   // touch targets and lays content out in rows, instead of shrinking the TV layout.
   const short = isPhoneLandscape(width, height);
-  const compact = width < 768 && !short;
+  const compact = !Platform.isTV && width < 768 && !short;
   const scale = compact || short ? 1 : Math.max(0.8, Math.min(width / 1440, height / 850, 1.35));
   return { width, height, compact, short, scale, gutter: compact ? 20 : short ? 24 : Math.max(32, Math.min(width * 0.04, 76)) };
 }
@@ -171,17 +171,17 @@ export function CinemaHeader({ active, onNavigate, onBack, center }: NavigationP
     </View>;
   }
   return <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: gutter, minHeight: compact ? 70 : short ? 56 : 78 * scale, gap: compact ? 4 : short ? 6 : 14 * scale }}>
-    {onBack && <CinemaButton label="返回" icon={ArrowLeft} compact onPress={onBack} scale={scale} />}
+    {onBack && <CinemaButton label="返回" icon={ArrowLeft} compact preferred={Platform.isTV} onPress={onBack} scale={scale} />}
     {!compact && !(short && width < 760) && <Pressable accessibilityRole="button" accessibilityLabel="暮映 DuskTV 首页" onPress={() => onNavigate('home')} style={({ focused }) => ({ flexDirection: 'row', alignItems: 'center', gap: 9 * scale, marginRight: short ? 8 : 22 * scale, padding: 5, borderRadius: 8, borderWidth: 2, borderColor: focused ? c.focus : 'transparent' })}>
       <Sunset size={28 * scale} color={c.accent} strokeWidth={1.5} /><Text style={{ color: c.text, fontSize: 22 * scale, fontWeight: '700', letterSpacing: -0.7 }}>暮映<Text style={{ fontSize: 14 * scale, fontWeight: '400', color: c.secondary }}> DuskTV</Text></Text>
     </Pressable>}
     <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: compact ? 0 : 4 * scale }}>
-      <CinemaButton label="首页" icon={compact ? Home : undefined} compact={compact} selected={active === 'home'} onPress={() => onNavigate('home')} scale={scale} />
-      <CinemaButton label="直播" icon={compact ? Tv : undefined} compact={compact} selected={active === 'live'} onPress={() => onNavigate('live')} scale={scale} />
-      <CinemaButton label="收藏" icon={compact ? Heart : undefined} compact={compact} selected={active === 'favorites'} onPress={() => onNavigate('favorites')} scale={scale} />
+      <CinemaButton label="首页" icon={compact ? Home : undefined} compact={compact} selected={active === 'home'} preferred={Platform.isTV && !onBack && active === 'home'} onPress={() => onNavigate('home')} scale={scale} />
+      <CinemaButton label="直播" icon={compact ? Tv : undefined} compact={compact} selected={active === 'live'} preferred={Platform.isTV && !onBack && active === 'live'} onPress={() => onNavigate('live')} scale={scale} />
+      <CinemaButton label="收藏" icon={compact ? Heart : undefined} compact={compact} selected={active === 'favorites'} preferred={Platform.isTV && !onBack && active === 'favorites'} onPress={() => onNavigate('favorites')} scale={scale} />
     </View>
     <CinemaButton label="搜索" icon={Search} compact={compact} selected={active === 'search'} onPress={() => onNavigate('search')} scale={scale} />
-    <CinemaButton label="设置" icon={Settings} compact selected={active === 'settings'} onPress={() => onNavigate('settings')} scale={scale} />
+    <CinemaButton label="设置" icon={Settings} compact selected={active === 'settings'} preferred={Platform.isTV && !onBack && active === 'settings'} onPress={() => onNavigate('settings')} scale={scale} />
   </View>;
 }
 export function CinemaShell({ children, active, onNavigate, onBack, center }: NavigationProps & { children: React.ReactNode; active?: CinemaPage; center?: React.ReactNode }) {
