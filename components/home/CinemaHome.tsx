@@ -58,10 +58,10 @@ export default function CinemaHome(props: Props) {
   return (
     <View style={styles.screen}>
       {showContent && featured?.poster && (
-        <View pointerEvents="none" style={[styles.backdrop, { height: heroHeight + 110 * scale }]}>
-          <PosterImage uri={props.imageUrl(featured.poster)} style={styles.backdropImage} blurRadius={24} />
-          <LinearGradient colors={[c.background, 'rgba(16,18,20,0.94)', 'rgba(16,18,20,0.2)']} locations={[0, 0.36, 1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.fill} />
-          <LinearGradient colors={['rgba(16,18,20,0.16)', 'rgba(16,18,20,0)', c.background]} locations={[0, 0.46, 1]} style={styles.fill} />
+        <View testID="home-backdrop" pointerEvents="none" style={styles.backdrop}>
+          <PosterImage uri={props.imageUrl(featured.poster)} style={styles.backdropImage} blurRadius={36} />
+          <LinearGradient colors={['rgba(16,18,20,0.78)', 'rgba(16,18,20,0.48)', 'rgba(16,18,20,0.28)']} locations={[0, 0.48, 1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.fill} />
+          <LinearGradient colors={['rgba(16,18,20,0.22)', 'rgba(16,18,20,0.12)', 'rgba(16,18,20,0.72)']} locations={[0, 0.4, 1]} style={styles.fill} />
         </View>
       )}
       <CinemaHeader active="home" onNavigate={page => page === 'home' ? scroll.current?.scrollTo({ y: 0, animated: false }) : props.onNavigate(page)} />
@@ -131,8 +131,9 @@ export default function CinemaHome(props: Props) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: c.background },
   fill: { ...StyleSheet.absoluteFillObject },
-  backdrop: { position: 'absolute', left: 0, right: 0, top: 0, overflow: 'hidden' },
-  backdropImage: { ...StyleSheet.absoluteFillObject },
+  backdrop: { ...StyleSheet.absoluteFillObject, overflow: 'hidden' },
+  // Overscan keeps the blur's transparent edges outside the viewport.
+  backdropImage: { position: 'absolute', top: -48, right: -48, bottom: -48, left: -48 },
   nav: { flexDirection: 'row', alignItems: 'center' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   message: { color: c.secondary, fontSize: 16, lineHeight: 25, textAlign: 'center', maxWidth: 600, marginTop: 14 },
